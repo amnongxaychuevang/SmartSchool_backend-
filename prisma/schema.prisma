@@ -1,0 +1,657 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  roleId Int    @id @default(autoincrement()) @map("role_id")
+  code   String @unique @db.VarChar(50)
+  nameEn String @map("name_en") @db.VarChar(100)
+  nameLo String @map("name_lo") @db.VarChar(100)
+
+  users  User[]
+
+  @@map("roles")
+}
+
+enum LangPref {
+  en
+  lo
+}
+
+model User {
+  userId       Int       @id @default(autoincrement()) @map("user_id")
+  fullNameEn   String    @map("full_name_en") @db.VarChar(150)
+  fullNameLo   String    @map("full_name_lo") @db.VarChar(150)
+  phoneNumber  String?   @unique @map("phone_number") @db.VarChar(20)
+  email        String?   @unique @db.VarChar(150)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  roleId       Int       @map("role_id")
+  langPref     LangPref  @default(lo) @map("lang_pref")
+  avatarUrl    String?   @map("avatar_url") @db.VarChar(255)
+  isActive     Boolean?  @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+
+  // Relations
+  role             Role                @relation(fields: [roleId], references: [roleId], onDelete: Restrict)
+  classes          Class[]             @relation("HomeroomTeacher")
+  parentStudents   ParentStudent[]
+  issuedCards      Card[]              @relation("CardIssuer")
+  manualAttendances AttendanceLog[]    @relation("ManualEntryBy")
+  taughtSubjects   Subject[]           @relation("SubjectTeacher")
+  givenGrades      Grade[]             @relation("GradeTeacher")
+  processedTransactions WalletTransaction[] @relation("ProcessedBy")
+  approvedTopUps   TopUpRequest[]      @relation("TopUpApprover")
+  topUpRequests    TopUpRequest[]      @relation("ParentRequester")
+  notifications    Notification[]      @relation("NotificationRecipient")
+  spendingLimits   SpendingLimit[]     @relation("SpendingLimitSetter")
+  taughtSchedules  Schedule[]          @relation("ScheduleTeacher")
+  requestedLeaves  LeaveRequest[]      @relation("ParentLeaveRequester")
+  approvedLeaves   LeaveRequest[]      @relation("LeaveApprover")
+  createdAnnouncements Announcement[]  @relation("AnnouncementCreator")
+  teacher          Teacher?
+  parent           Parent?
+  refreshTokens    RefreshToken[]      @relation("UserRefreshTokens")
+  auditLogs        AuditLog[]          @relation("AuditLogUser")
+
+  @@index([phoneNumber])
+  @@index([email])
+  @@index([roleId])
+  @@map("users")
+}
+
+// Opaque, rotating refresh tokens for short-lived JWT access tokens. Only a
+// hash of the raw token is stored — a stolen DB row alone can't be replayed
+// as a working token, same rationale as password hashing.
+model RefreshToken {
+  tokenId   Int       @id @default(autoincrement()) @map("token_id")
+  userId    Int       @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.VarChar(255)
+  userAgent String?   @map("user_agent") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  user User @relation("UserRefreshTokens", fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+enum AuditAction {
+  login
+  login_failed
+  logout
+  create
+  update
+  delete
+  approve
+  reject
+  status_change
+}
+
+// Append-only record of who did what to which record, for accountability on
+// money- and access-affecting actions (wallet transactions, top-up approval,
+// spending-limit changes, account deletion, login attempts, ...).
+model AuditLog {
+  auditId    Int         @id @default(autoincrement()) @map("audit_id")
+  userId     Int?        @map("user_id") // null for a failed login with an unknown/bad identifier
+  action     AuditAction
+  entityType String      @map("entity_type") @db.VarChar(50)
+  entityId   String?     @map("entity_id") @db.VarChar(50)
+  detail     Json?
+  ipAddress  String?     @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime?   @default(now()) @map("created_at")
+
+  user User? @relation("AuditLogUser", fields: [userId], references: [userId], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Teacher {
+  teacherId       Int       @id @default(autoincrement()) @map("teacher_id")
+  userId          Int       @unique @map("user_id")
+  employeeCode    String    @unique @map("employee_code") @db.VarChar(20)
+  specialization  String?   @db.VarChar(100)
+  qualificationEn String?   @map("qualification_en") @db.VarChar(150)
+  qualificationLo String?   @map("qualification_lo") @db.VarChar(150)
+  hireDate        DateTime? @map("hire_date") @db.Date
+  salary          Decimal?  @db.Decimal(12, 2)
+  addressEn       String?   @map("address_en") @db.Text
+  addressLo       String?   @map("address_lo") @db.Text
+  notesEn         String?   @map("notes_en") @db.Text
+  notesLo         String?   @map("notes_lo") @db.Text
+  createdAt       DateTime? @default(now()) @map("created_at")
+  updatedAt       DateTime? @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([employeeCode])
+  @@map("teachers")
+}
+
+model Parent {
+  parentId         Int       @id @default(autoincrement()) @map("parent_id")
+  userId           Int       @unique @map("user_id")
+  occupationEn     String?   @map("occupation_en") @db.VarChar(150)
+  occupationLo     String?   @map("occupation_lo") @db.VarChar(150)
+  addressEn        String?   @map("address_en") @db.Text
+  addressLo        String?   @map("address_lo") @db.Text
+  emergencyContact String?   @map("emergency_contact") @db.VarChar(20)
+  lineId           String?   @map("line_id") @db.VarChar(50)
+  nationalId       String?   @map("national_id") @db.VarChar(30)
+  notesEn          String?   @map("notes_en") @db.Text
+  notesLo          String?   @map("notes_lo") @db.Text
+  createdAt        DateTime? @default(now()) @map("created_at")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("parents")
+}
+
+
+
+model Class {
+  classId           Int       @id @default(autoincrement()) @map("class_id")
+  classNameEn       String    @map("class_name_en") @db.VarChar(50)
+  classNameLo       String    @map("class_name_lo") @db.VarChar(50)
+  gradeLevelEn      String?   @map("grade_level_en") @db.VarChar(20)
+  gradeLevelLo      String?   @map("grade_level_lo") @db.VarChar(20)
+  homeroomTeacherId Int?      @map("homeroom_teacher_id")
+  academicYear      String    @map("academic_year") @db.VarChar(9)
+  descriptionEn     String?   @map("description_en") @db.Text
+  descriptionLo     String?   @map("description_lo") @db.Text
+  isActive          Boolean?  @default(true) @map("is_active")
+  createdAt         DateTime? @default(now()) @map("created_at")
+
+  homeroomTeacher User?          @relation("HomeroomTeacher", fields: [homeroomTeacherId], references: [userId], onDelete: SetNull)
+  classStudents   ClassStudent[]
+  subjects        Subject[]
+  schedules       Schedule[]
+
+  @@index([academicYear])
+  @@map("classes")
+}
+
+enum StudentStatus {
+  active
+  graduated
+  transferred
+}
+
+enum GenderEnum {
+  male
+  female
+  other
+}
+
+model Gender {
+  id     Int    @id @default(autoincrement())
+  code   String @unique @db.VarChar(20)
+  nameEn String @map("name_en") @db.VarChar(50)
+  nameLo String @map("name_lo") @db.VarChar(50)
+  
+  @@map("genders")
+}
+
+model Student {
+  studentId     Int           @id @default(autoincrement()) @map("student_id")
+  studentCode   String        @unique @map("student_code") @db.VarChar(20)
+  fullNameEn    String        @map("full_name_en") @db.VarChar(150)
+  fullNameLo    String        @map("full_name_lo") @db.VarChar(150)
+  dateOfBirth   DateTime?     @map("date_of_birth") @db.Date
+  gender        GenderEnum?
+  photoUrl      String?       @map("photo_url") @db.VarChar(255)
+  nationalityEn String?       @default("Lao") @map("nationality_en") @db.VarChar(50)
+  nationalityLo String?       @default("ລາວ") @map("nationality_lo") @db.VarChar(50)
+  addressEn     String?       @map("address_en") @db.Text
+  addressLo     String?       @map("address_lo") @db.Text
+  status        StudentStatus? @default(active)
+  notesEn       String?       @map("notes_en") @db.Text
+  notesLo       String?       @map("notes_lo") @db.Text
+  createdAt     DateTime?     @default(now()) @map("created_at")
+  updatedAt     DateTime?     @updatedAt @map("updated_at")
+
+  // Relations
+  classStudents   ClassStudent[]
+  parentStudents  ParentStudent[]
+  cards           Card[]
+  attendanceLogs  AttendanceLog[]
+  grades          Grade[]
+  walletAccount   WalletAccount?
+  topUpRequests   TopUpRequest[]
+  notifications   Notification[]
+  spendingLimit   SpendingLimit?
+  leaveRequests   LeaveRequest[]
+
+  @@index([studentCode])
+  @@index([status])
+  @@map("students")
+}
+
+model ClassStudent {
+  id         Int       @id @default(autoincrement())
+  classId    Int       @map("class_id")
+  studentId  Int       @map("student_id")
+  enrolledAt DateTime? @default(now()) @map("enrolled_at")
+
+  class   Class   @relation(fields: [classId], references: [classId], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+
+  @@unique([classId, studentId], name: "uq_class_student")
+  @@map("class_students")
+}
+
+enum RelationshipEn {
+  father
+  mother
+  guardian
+  other
+}
+
+model ParentStudent {
+  id               Int            @id @default(autoincrement())
+  parentUserId     Int            @map("parent_user_id")
+  studentId        Int            @map("student_id")
+  relationshipEn   RelationshipEn? @default(guardian) @map("relationship_en")
+  relationshipLo   String?        @default("ຜູ້ປົກຄອງ") @map("relationship_lo") @db.VarChar(50)
+  isPrimaryContact Boolean?       @default(true) @map("is_primary_contact")
+
+  parent  User    @relation(fields: [parentUserId], references: [userId], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+
+  @@unique([parentUserId, studentId], name: "uq_parent_student")
+  @@map("parent_student")
+}
+
+enum CardStatus {
+  active
+  lost
+  deactivated
+}
+
+model Card {
+  cardId      Int         @id @default(autoincrement()) @map("card_id")
+  cardUid     String      @unique @map("card_uid") @db.VarChar(50)
+  studentId   Int         @map("student_id")
+  issuedDate  DateTime?   @default(now()) @map("issued_date")
+  expiredDate DateTime?   @map("expired_date") @db.Date
+  status      CardStatus? @default(active)
+  notesEn     String?     @map("notes_en") @db.VarChar(255)
+  notesLo     String?     @map("notes_lo") @db.VarChar(255)
+  issuedBy    Int?        @map("issued_by")
+
+  student        Student         @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  issuer         User?           @relation("CardIssuer", fields: [issuedBy], references: [userId], onDelete: SetNull)
+  attendanceLogs AttendanceLog[]
+
+  @@index([cardUid])
+  @@index([status])
+  @@map("cards")
+}
+
+enum LogType {
+  check_in
+  check_out
+}
+
+model AttendanceLog {
+  logId          Int       @id @default(autoincrement()) @map("log_id")
+  studentId      Int       @map("student_id")
+  cardId         Int?      @map("card_id")
+  logType        LogType   @map("log_type")
+  logTime        DateTime? @default(now()) @map("log_time")
+  gateLocationEn String?   @map("gate_location_en") @db.VarChar(50)
+  gateLocationLo String?   @map("gate_location_lo") @db.VarChar(50)
+  isManualEntry  Boolean?  @default(false) @map("is_manual_entry")
+  manualEntryBy  Int?      @map("manual_entry_by")
+  notified       Boolean?  @default(false)
+  remarkEn       String?   @map("remark_en") @db.VarChar(255)
+  remarkLo       String?   @map("remark_lo") @db.VarChar(255)
+
+  student       Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  card          Card?   @relation(fields: [cardId], references: [cardId], onDelete: SetNull)
+  manualEnterer User?   @relation("ManualEntryBy", fields: [manualEntryBy], references: [userId], onDelete: SetNull)
+
+  @@index([studentId, logTime])
+  @@index([logType])
+  @@index([logTime])
+  @@map("attendance_logs")
+}
+
+model Subject {
+  subjectId     Int      @id @default(autoincrement()) @map("subject_id")
+  subjectNameEn String   @map("subject_name_en") @db.VarChar(100)
+  subjectNameLo String   @map("subject_name_lo") @db.VarChar(100)
+  subjectCode   String?  @unique @map("subject_code") @db.VarChar(20)
+  descriptionEn String?  @map("description_en") @db.Text
+  descriptionLo String?  @map("description_lo") @db.Text
+  teacherId     Int?     @map("teacher_id")
+  classId       Int?     @map("class_id")
+  credits       Decimal? @default(1.0) @db.Decimal(3, 1)
+  isActive      Boolean? @default(true) @map("is_active")
+
+  teacher User?   @relation("SubjectTeacher", fields: [teacherId], references: [userId], onDelete: SetNull)
+  class   Class?  @relation(fields: [classId], references: [classId], onDelete: SetNull)
+  grades  Grade[]
+  schedules Schedule[]
+
+  @@index([teacherId])
+  @@index([classId])
+  @@map("subjects")
+}
+
+model GradeType {
+  typeId        Int      @id @default(autoincrement()) @map("type_id")
+  typeNameEn    String   @map("type_name_en") @db.VarChar(100)
+  typeNameLo    String   @map("type_name_lo") @db.VarChar(100)
+  weightPercent Decimal? @default(100.00) @map("weight_percent") @db.Decimal(5, 2)
+  descriptionEn String?  @map("description_en") @db.Text
+  descriptionLo String?  @map("description_lo") @db.Text
+
+  grades Grade[]
+
+  @@map("grade_types")
+}
+
+model Grade {
+  gradeId      Int       @id @default(autoincrement()) @map("grade_id")
+  studentId    Int       @map("student_id")
+  subjectId    Int       @map("subject_id")
+  teacherId    Int       @map("teacher_id")
+  gradeTypeId  Int?      @map("grade_type_id")
+  score        Decimal?  @db.Decimal(5, 2)
+  maxScore     Decimal?  @default(100) @map("max_score") @db.Decimal(5, 2)
+  gradeMonth   String?   @map("grade_month") @db.VarChar(7)
+  remarksEn    String?   @map("remarks_en") @db.Text
+  remarksLo    String?   @map("remarks_lo") @db.Text
+  isPublished  Boolean?  @default(false) @map("is_published")
+  recordedAt   DateTime? @default(now()) @map("recorded_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+
+  student   Student    @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  subject   Subject    @relation(fields: [subjectId], references: [subjectId], onDelete: Cascade)
+  teacher   User       @relation("GradeTeacher", fields: [teacherId], references: [userId], onDelete: Restrict)
+  gradeType GradeType? @relation(fields: [gradeTypeId], references: [typeId], onDelete: SetNull)
+
+  @@index([studentId, gradeMonth])
+  @@index([subjectId])
+  @@map("grades")
+}
+
+model Shop {
+  shopId        Int       @id @default(autoincrement()) @map("shop_id")
+  shopNameEn    String    @map("shop_name_en") @db.VarChar(100)
+  shopNameLo    String    @map("shop_name_lo") @db.VarChar(100)
+  locationEn    String?   @map("location_en") @db.VarChar(100)
+  locationLo    String?   @map("location_lo") @db.VarChar(100)
+  descriptionEn String?   @map("description_en") @db.Text
+  descriptionLo String?   @map("description_lo") @db.Text
+  isActive      Boolean?  @default(true) @map("is_active")
+  createdAt     DateTime? @default(now()) @map("created_at")
+
+  transactions WalletTransaction[]
+
+  @@map("shops")
+}
+
+enum WalletStatus {
+  active
+  frozen
+}
+
+model WalletAccount {
+  walletId     Int           @id @default(autoincrement()) @map("wallet_id")
+  studentId    Int           @unique @map("student_id")
+  balance      Decimal?      @default(0.00) @db.Decimal(10, 2)
+  dailyLimit   Decimal?      @map("daily_limit") @db.Decimal(10, 2)
+  status       WalletStatus? @default(active)
+  currencyCode String?       @default("LAK") @map("currency_code") @db.VarChar(3)
+  notesEn      String?       @map("notes_en") @db.VarChar(255)
+  notesLo      String?       @map("notes_lo") @db.VarChar(255)
+  createdAt    DateTime?     @default(now()) @map("created_at")
+  updatedAt    DateTime?     @updatedAt @map("updated_at")
+
+  student      Student             @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("wallet_accounts")
+}
+
+enum TransactionType {
+  top_up
+  purchase
+  refund
+}
+
+model WalletTransaction {
+  transactionId   Int             @id @default(autoincrement()) @map("transaction_id")
+  walletId        Int             @map("wallet_id")
+  shopId          Int?            @map("shop_id")
+  transactionType TransactionType @map("transaction_type")
+  amount          Decimal         @db.Decimal(10, 2)
+  balanceBefore   Decimal         @map("balance_before") @db.Decimal(10, 2)
+  balanceAfter    Decimal         @map("balance_after") @db.Decimal(10, 2)
+  descriptionEn   String?         @map("description_en") @db.VarChar(255)
+  descriptionLo   String?         @map("description_lo") @db.VarChar(255)
+  referenceNo     String?         @unique @map("reference_no") @db.VarChar(50)
+  processedBy     Int?            @map("processed_by")
+  createdAt       DateTime?       @default(now()) @map("created_at")
+
+  wallet    WalletAccount @relation(fields: [walletId], references: [walletId], onDelete: Restrict)
+  shop      Shop?         @relation(fields: [shopId], references: [shopId], onDelete: SetNull)
+  processor User?         @relation("ProcessedBy", fields: [processedBy], references: [userId], onDelete: SetNull)
+
+  @@index([walletId, createdAt])
+  @@index([transactionType])
+  @@index([referenceNo])
+  @@map("wallet_transactions")
+}
+
+enum TopUpMethod {
+  cash
+  mobile_banking
+  admin_manual
+}
+
+enum TopUpStatus {
+  pending
+  approved
+  rejected
+}
+
+model TopUpRequest {
+  requestId      Int         @id @default(autoincrement()) @map("request_id")
+  studentId      Int         @map("student_id")
+  parentUserId   Int         @map("parent_user_id")
+  amount         Decimal     @db.Decimal(10, 2)
+  method         TopUpMethod
+  methodLabelEn  String?     @map("method_label_en") @db.VarChar(100)
+  methodLabelLo  String?     @map("method_label_lo") @db.VarChar(100)
+  status         TopUpStatus? @default(pending)
+  approvedBy     Int?        @map("approved_by")
+  rejectReasonEn String?     @map("reject_reason_en") @db.Text
+  rejectReasonLo String?     @map("reject_reason_lo") @db.Text
+  slipUrl        String?     @map("slip_url") @db.VarChar(255)
+  requestedAt    DateTime?   @default(now()) @map("requested_at")
+  processedAt    DateTime?   @map("processed_at")
+
+  student         Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  parentRequester User    @relation("ParentRequester", fields: [parentUserId], references: [userId], onDelete: Cascade)
+  approver        User?   @relation("TopUpApprover", fields: [approvedBy], references: [userId], onDelete: SetNull)
+
+  @@index([status])
+  @@index([studentId])
+  @@map("top_up_requests")
+}
+
+enum NotificationType {
+  check_in
+  check_out
+  absence
+  grade
+  transaction
+  general
+}
+
+enum NotificationChannel {
+  sms
+  line
+  telegram
+  app_push
+  email
+}
+
+enum NotificationStatus {
+  sent
+  failed
+  pending
+}
+
+model Notification {
+  notificationId  Int                 @id @default(autoincrement()) @map("notification_id")
+  recipientUserId Int                 @map("recipient_user_id")
+  studentId       Int?                @map("student_id")
+  type            NotificationType
+  channel         NotificationChannel
+  messageEn       String              @map("message_en") @db.Text
+  messageLo       String              @map("message_lo") @db.Text
+  sentAt          DateTime?           @default(now()) @map("sent_at")
+  deliveredAt     DateTime?           @map("delivered_at")
+  status          NotificationStatus? @default(pending)
+  errorMessage    String?             @map("error_message") @db.Text
+
+  recipient User     @relation("NotificationRecipient", fields: [recipientUserId], references: [userId], onDelete: Cascade)
+  student   Student? @relation(fields: [studentId], references: [studentId], onDelete: SetNull)
+
+  @@index([recipientUserId])
+  @@index([type])
+  @@index([status])
+  @@map("notifications")
+}
+
+model SpendingLimit {
+  limitId           Int       @id @default(autoincrement()) @map("limit_id")
+  studentId         Int       @unique @map("student_id")
+  dailyMax          Decimal?  @map("daily_max") @db.Decimal(10, 2)
+  weeklyMax         Decimal?  @map("weekly_max") @db.Decimal(10, 2)
+  perTransactionMax Decimal?  @map("per_transaction_max") @db.Decimal(10, 2)
+  blockedShops      Json?     @map("blocked_shops")
+  alertThreshold    Decimal?  @map("alert_threshold") @db.Decimal(10, 2)
+  notesEn           String?   @map("notes_en") @db.VarChar(255)
+  notesLo           String?   @map("notes_lo") @db.VarChar(255)
+  setBy             Int       @map("set_by")
+  updatedAt         DateTime? @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  setter  User    @relation("SpendingLimitSetter", fields: [setBy], references: [userId], onDelete: Restrict)
+
+  @@map("spending_limits")
+}
+
+model I18nMessage {
+  messageKey  String    @id @map("message_key") @db.VarChar(100)
+  messageEn   String    @map("message_en") @db.Text
+  messageLo   String    @map("message_lo") @db.Text
+  description String?   @db.VarChar(255)
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  @@map("i18n_messages")
+}
+
+// --- New Additions ---
+
+enum TermStatus {
+  active
+  upcoming
+  completed
+}
+
+model AcademicTerm {
+  termId       Int        @id @default(autoincrement()) @map("term_id")
+  academicYear String     @map("academic_year") @db.VarChar(9)
+  termNameEn   String     @map("term_name_en") @db.VarChar(50)
+  termNameLo   String     @map("term_name_lo") @db.VarChar(50)
+  startDate    DateTime   @map("start_date") @db.Date
+  endDate      DateTime   @map("end_date") @db.Date
+  status       TermStatus @default(upcoming)
+  createdAt    DateTime?  @default(now()) @map("created_at")
+
+  @@map("academic_terms")
+}
+
+model Schedule {
+  scheduleId Int      @id @default(autoincrement()) @map("schedule_id")
+  classId    Int      @map("class_id")
+  subjectId  Int      @map("subject_id")
+  teacherId  Int?     @map("teacher_id")
+  dayOfWeek  Int      @map("day_of_week") // 0 = Sunday, 1 = Monday, etc.
+  startTime  DateTime @map("start_time") @db.Time
+  endTime    DateTime @map("end_time") @db.Time
+  roomNumber String?  @map("room_number") @db.VarChar(50)
+
+  class   Class   @relation(fields: [classId], references: [classId], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [subjectId], onDelete: Cascade)
+  teacher User?   @relation("ScheduleTeacher", fields: [teacherId], references: [userId], onDelete: SetNull)
+
+  @@index([classId, dayOfWeek])
+  @@index([teacherId, dayOfWeek])
+  @@map("schedules")
+}
+
+enum LeaveStatus {
+  pending
+  approved
+  rejected
+}
+
+model LeaveRequest {
+  leaveId      Int         @id @default(autoincrement()) @map("leave_id")
+  studentId    Int         @map("student_id")
+  parentUserId Int         @map("parent_user_id")
+  startDate    DateTime    @map("start_date") @db.Date
+  endDate      DateTime    @map("end_date") @db.Date
+  reasonEn     String?     @map("reason_en") @db.Text
+  reasonLo     String?     @map("reason_lo") @db.Text
+  documentUrl  String?     @map("document_url") @db.VarChar(255)
+  status       LeaveStatus @default(pending)
+  approvedBy   Int?        @map("approved_by")
+  requestedAt  DateTime?   @default(now()) @map("requested_at")
+  processedAt  DateTime?   @map("processed_at")
+
+  student   Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  parent    User    @relation("ParentLeaveRequester", fields: [parentUserId], references: [userId], onDelete: Cascade)
+  approver  User?   @relation("LeaveApprover", fields: [approvedBy], references: [userId], onDelete: SetNull)
+
+  @@index([studentId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+model Announcement {
+  announcementId Int       @id @default(autoincrement()) @map("announcement_id")
+  titleEn        String    @map("title_en") @db.VarChar(255)
+  titleLo        String    @map("title_lo") @db.VarChar(255)
+  contentEn      String    @map("content_en") @db.Text
+  contentLo      String    @map("content_lo") @db.Text
+  targetAudience String    @default("all") @map("target_audience") @db.VarChar(50) // e.g. "all", "teachers", "parents"
+  publishDate    DateTime? @default(now()) @map("publish_date")
+  expiryDate     DateTime? @map("expiry_date")
+  createdBy      Int       @map("created_by")
+
+  author User @relation("AnnouncementCreator", fields: [createdBy], references: [userId], onDelete: Restrict)
+
+  @@index([publishDate])
+  @@map("announcements")
+}

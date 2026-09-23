@@ -1,0 +1,23 @@
+# Build output
+dist
+build
+
+# Node dependencies
+node_modules
+
+# Prisma
+prisma/generated
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.idea
+.fleet
+
+# Local env files (never commit real secrets — DB password, JWT_SECRET, DEVICE_API_KEY, etc.)
+.env
+.env.*
+!.env.example
