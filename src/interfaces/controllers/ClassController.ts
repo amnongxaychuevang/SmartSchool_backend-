@@ -17,6 +17,7 @@ class ClassController {
         search,
         page: parseInt(page),
         limit: parseInt(limit),
+        teacherUserId: req.user?.role === 'teacher' ? req.user.userId : undefined,
       });
       res.json({ success: true, data: result });
     } catch (error) {

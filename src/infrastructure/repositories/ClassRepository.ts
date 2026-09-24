@@ -1,17 +1,24 @@
 import prisma from '../database/PrismaClient';
+import { teacherClassesWhere } from './AcademicYear';
 
 class ClassRepository {
-  async findMany({ search = '', page = 1, limit = 20 }: any = {}) {
+  async findMany({ search = '', page = 1, limit = 20, teacherUserId }: any = {}) {
     const skip = (page - 1) * limit;
-    const where = search
-      ? {
-          OR: [
-            { classNameEn: { contains: search } },
-            { classNameLo: { contains: search } },
-            { academicYear: { contains: search } },
-          ],
-        }
-      : {};
+    const where = {
+      AND: [
+        search
+          ? {
+              OR: [
+                { classNameEn: { contains: search } },
+                { classNameLo: { contains: search } },
+                { academicYear: { contains: search } },
+              ],
+            }
+          : {},
+        // Teachers only see their own classes.
+        teacherUserId ? await teacherClassesWhere(teacherUserId) : {},
+      ],
+    };
 
     const [classes, total] = await Promise.all([
       prisma.class.findMany({

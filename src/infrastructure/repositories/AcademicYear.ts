@@ -21,6 +21,23 @@ export async function getCurrentTermId(): Promise<number | null> {
   return term?.termId ?? null;
 }
 
+// Classes a teacher works with this year: homeroom classes plus classes they teach
+// a subject to in the active term.
+export async function teacherClassesWhere(teacherUserId: number) {
+  return {
+    academicYear: await getCurrentAcademicYear(),
+    OR: [
+      { homeroomTeacherId: teacherUserId },
+      { classSubjects: { some: { teacherId: teacherUserId, term: { status: 'active' as const } } } },
+    ],
+  };
+}
+
+export async function teacherHasClass(teacherUserId: number, classId: number): Promise<boolean> {
+  const count = await prisma.class.count({ where: { classId, ...(await teacherClassesWhere(teacherUserId)) } });
+  return count > 0;
+}
+
 // Prisma filter for a student's current enrolment: this year's class, not left.
 export async function currentEnrolmentWhere() {
   return { leftAt: null, class: { academicYear: await getCurrentAcademicYear() } };
