@@ -21,6 +21,19 @@ async function main() {
   }
   console.log('Role options seeded ✓');
 
+  // Default grade types (only if none exist yet — admins may rename or add their own).
+  if ((await prisma.gradeType.count()) === 0) {
+    await prisma.gradeType.createMany({
+      data: [
+        { typeNameEn: 'Monthly test', typeNameLo: 'ສອບເສັງປະຈຳເດືອນ', weightPercent: 20 },
+        { typeNameEn: 'Midterm exam', typeNameLo: 'ສອບເສັງກາງພາກ', weightPercent: 30 },
+        { typeNameEn: 'Final exam', typeNameLo: 'ສອບເສັງທ້າຍພາກ', weightPercent: 40 },
+        { typeNameEn: 'Homework / participation', typeNameLo: 'ວຽກບ້ານ / ການມີສ່ວນຮ່ວມ', weightPercent: 10 },
+      ],
+    });
+    console.log('Grade types seeded ✓');
+  }
+
   // Seed admin user only if not yet created
   const existingAdmin = await prisma.user.findFirst({
     where: { email: 'admin@smartschool.com' }

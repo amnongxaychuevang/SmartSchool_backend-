@@ -1,5 +1,4 @@
-import { PrismaClient  } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../../infrastructure/database/PrismaClient';
 
 const RoleController = {
   list: async (req, res) => {

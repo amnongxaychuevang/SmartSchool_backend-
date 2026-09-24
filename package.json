@@ -9,7 +9,8 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "db:sql": "node scripts/generate-schema-sql.js"
   },
   "keywords": [],
   "author": "",

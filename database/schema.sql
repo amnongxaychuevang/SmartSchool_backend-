@@ -1,391 +1,638 @@
--- ============================================================
--- Smart School System — Database Schema
--- Bilingual Support: English (en) + Lao (lo)
--- Version: 2.0
--- ============================================================
--- Charset: utf8mb4 ຮອງຮັບ Unicode (ພາສາລາວ + Emoji)
--- ============================================================
+-- GENERATED from prisma/schema.prisma — do not edit by hand.
+-- Regenerate with: npm run db:sql
 
-CREATE DATABASE IF NOT EXISTS smart_school
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
+-- CreateTable
+CREATE TABLE `roles` (
+    `role_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `code` VARCHAR(50) NOT NULL,
+    `name_en` VARCHAR(100) NOT NULL,
+    `name_lo` VARCHAR(100) NOT NULL,
 
-USE smart_school;
+    UNIQUE INDEX `roles_code_key`(`code`),
+    PRIMARY KEY (`role_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-SET FOREIGN_KEY_CHECKS = 0;
+-- CreateTable
+CREATE TABLE `users` (
+    `user_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `full_name_en` VARCHAR(150) NOT NULL,
+    `full_name_lo` VARCHAR(150) NOT NULL,
+    `phone_number` VARCHAR(20) NULL,
+    `email` VARCHAR(150) NULL,
+    `password_hash` VARCHAR(255) NOT NULL,
+    `role_id` INTEGER NOT NULL,
+    `lang_pref` ENUM('en', 'lo') NOT NULL DEFAULT 'lo',
+    `avatar_url` VARCHAR(255) NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT true,
+    `last_login` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
 
--- ============================================================
--- 1. users — ບັນຊີຜູ້ໃຊ້ງານທັງໝົດ (admin, teacher, parent)
--- ============================================================
-CREATE TABLE IF NOT EXISTS users (
-    user_id         INT PRIMARY KEY AUTO_INCREMENT,
-    full_name_en    VARCHAR(150) NOT NULL COMMENT 'Full name in English',
-    full_name_lo    VARCHAR(150) NOT NULL COMMENT 'ຊື່ເຕັມເປັນພາສາລາວ',
-    phone_number    VARCHAR(20) UNIQUE,
-    email           VARCHAR(150) UNIQUE,
-    password_hash   VARCHAR(255) NOT NULL,
-    role            ENUM('admin', 'teacher', 'parent') NOT NULL,
-    lang_pref       ENUM('en', 'lo') DEFAULT 'lo' COMMENT 'ພາສາທີ່ຜູ້ໃຊ້ຕ້ອງການ',
-    avatar_url      VARCHAR(255),
-    is_active       BOOLEAN DEFAULT TRUE,
-    last_login      DATETIME,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE INDEX `users_phone_number_key`(`phone_number`),
+    UNIQUE INDEX `users_email_key`(`email`),
+    INDEX `users_role_id_idx`(`role_id`),
+    PRIMARY KEY (`user_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-    INDEX idx_phone    (phone_number),
-    INDEX idx_email    (email),
-    INDEX idx_role     (role)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ບັນຊີຜູ້ໃຊ້ງານທັງໝົດ | All system user accounts';
+-- CreateTable
+CREATE TABLE `refresh_tokens` (
+    `token_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `token_hash` VARCHAR(255) NOT NULL,
+    `user_agent` VARCHAR(255) NULL,
+    `expires_at` DATETIME(3) NOT NULL,
+    `revoked_at` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
+    UNIQUE INDEX `refresh_tokens_token_hash_key`(`token_hash`),
+    INDEX `refresh_tokens_user_id_idx`(`user_id`),
+    INDEX `refresh_tokens_expires_at_idx`(`expires_at`),
+    PRIMARY KEY (`token_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- ============================================================
--- 2. classes — ຫ້ອງຮຽນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS classes (
-    class_id            INT PRIMARY KEY AUTO_INCREMENT,
-    class_name_en       VARCHAR(50) NOT NULL COMMENT 'Class name in English e.g. Grade 3/1',
-    class_name_lo       VARCHAR(50) NOT NULL COMMENT 'ຊື່ຫ້ອງໃນລາວ ເຊັ່ນ: ມໍ 3/1',
-    grade_level_en      VARCHAR(20) COMMENT 'e.g. Grade 7',
-    grade_level_lo      VARCHAR(20) COMMENT 'ຕົວຢ່າງ: ມໍຕົ້ນ 1',
-    homeroom_teacher_id INT COMMENT 'ອາຈານປະຈຳຫ້ອງ',
-    academic_year       VARCHAR(9) NOT NULL COMMENT 'ສົກຮຽນ e.g. 2026-2027',
-    description_en      TEXT COMMENT 'Optional class description (English)',
-    description_lo      TEXT COMMENT 'ລາຍລະອຽດຫ້ອງ (ລາວ)',
-    is_active           BOOLEAN DEFAULT TRUE,
-    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+-- CreateTable
+CREATE TABLE `audit_logs` (
+    `audit_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NULL,
+    `action` ENUM('login', 'login_failed', 'logout', 'create', 'update', 'delete', 'approve', 'reject', 'status_change') NOT NULL,
+    `entity_type` VARCHAR(50) NOT NULL,
+    `entity_id` VARCHAR(50) NULL,
+    `detail` JSON NULL,
+    `ip_address` VARCHAR(45) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    FOREIGN KEY (homeroom_teacher_id) REFERENCES users(user_id) ON DELETE SET NULL,
-    INDEX idx_academic_year (academic_year)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ຂໍ້ມູນຫ້ອງຮຽນ | Class information';
+    INDEX `audit_logs_user_id_idx`(`user_id`),
+    INDEX `audit_logs_entity_type_entity_id_idx`(`entity_type`, `entity_id`),
+    INDEX `audit_logs_created_at_idx`(`created_at`),
+    PRIMARY KEY (`audit_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `teachers` (
+    `teacher_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `employee_code` VARCHAR(20) NOT NULL,
+    `specialization` VARCHAR(100) NULL,
+    `qualification` VARCHAR(150) NULL,
+    `hire_date` DATE NULL,
+    `salary` DECIMAL(12, 2) NULL,
+    `address` TEXT NULL,
+    `notes` TEXT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
 
--- ============================================================
--- 3. students — ຂໍ້ມູນນັກຮຽນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS students (
-    student_id      INT PRIMARY KEY AUTO_INCREMENT,
-    student_code    VARCHAR(20) UNIQUE NOT NULL COMMENT 'ລະຫັດນັກຮຽນ | Student ID number',
-    full_name_en    VARCHAR(150) NOT NULL COMMENT 'Full name in English',
-    full_name_lo    VARCHAR(150) NOT NULL COMMENT 'ຊື່ເຕັມພາສາລາວ',
-    date_of_birth   DATE,
-    gender          ENUM('male', 'female', 'other'),
-    photo_url       VARCHAR(255),
-    nationality_en  VARCHAR(50) DEFAULT 'Lao' COMMENT 'Nationality (English)',
-    nationality_lo  VARCHAR(50) DEFAULT 'ລາວ' COMMENT 'ສັນຊາດ (ລາວ)',
-    address_en      TEXT COMMENT 'Home address (English)',
-    address_lo      TEXT COMMENT 'ທີ່ຢູ່ (ລາວ)',
-    status          ENUM('active', 'graduated', 'transferred') DEFAULT 'active',
-    notes_en        TEXT COMMENT 'Admin notes (English)',
-    notes_lo        TEXT COMMENT 'ບັນທຶກຂອງ Admin (ລາວ)',
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE INDEX `teachers_user_id_key`(`user_id`),
+    UNIQUE INDEX `teachers_employee_code_key`(`employee_code`),
+    PRIMARY KEY (`teacher_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-    INDEX idx_student_code (student_code),
-    INDEX idx_status       (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ຂໍ້ມູນນັກຮຽນ | Student profiles';
+-- CreateTable
+CREATE TABLE `parents` (
+    `parent_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `occupation` VARCHAR(150) NULL,
+    `address` TEXT NULL,
+    `emergency_contact` VARCHAR(20) NULL,
+    `line_id` VARCHAR(50) NULL,
+    `national_id` VARCHAR(30) NULL,
+    `notes` TEXT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
 
+    UNIQUE INDEX `parents_user_id_key`(`user_id`),
+    PRIMARY KEY (`parent_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- ============================================================
--- 4. class_students — ນັກຮຽນໃນແຕ່ລະຫ້ອງ
--- ============================================================
-CREATE TABLE IF NOT EXISTS class_students (
-    id              INT PRIMARY KEY AUTO_INCREMENT,
-    class_id        INT NOT NULL,
-    student_id      INT NOT NULL,
-    enrolled_at     DATE DEFAULT (CURRENT_DATE),
+-- CreateTable
+CREATE TABLE `classes` (
+    `class_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `class_name_en` VARCHAR(50) NOT NULL,
+    `class_name_lo` VARCHAR(50) NOT NULL,
+    `grade_level_en` VARCHAR(20) NULL,
+    `grade_level_lo` VARCHAR(20) NULL,
+    `homeroom_teacher_id` INTEGER NULL,
+    `academic_year` VARCHAR(9) NOT NULL,
+    `description_en` TEXT NULL,
+    `description_lo` TEXT NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT true,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    FOREIGN KEY (class_id)   REFERENCES classes(class_id)   ON DELETE CASCADE,
-    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
-    UNIQUE KEY uq_class_student (class_id, student_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ນັກຮຽນ ↔ ຫ້ອງຮຽນ | Student-Class enrollment';
+    INDEX `classes_academic_year_idx`(`academic_year`),
+    PRIMARY KEY (`class_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `students` (
+    `student_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_code` VARCHAR(20) NOT NULL,
+    `full_name_en` VARCHAR(150) NOT NULL,
+    `full_name_lo` VARCHAR(150) NOT NULL,
+    `date_of_birth` DATE NULL,
+    `gender` ENUM('male', 'female', 'other') NULL,
+    `photo_url` VARCHAR(255) NULL,
+    `nationality_en` VARCHAR(50) NOT NULL DEFAULT 'Lao',
+    `nationality_lo` VARCHAR(50) NOT NULL DEFAULT 'ລາວ',
+    `village` VARCHAR(100) NULL,
+    `district` VARCHAR(100) NULL,
+    `province` VARCHAR(100) NULL,
+    `address` TEXT NULL,
+    `ethnicity` VARCHAR(50) NULL,
+    `birth_place` VARCHAR(150) NULL,
+    `previous_school` VARCHAR(150) NULL,
+    `blood_type` VARCHAR(5) NULL,
+    `medical_notes` TEXT NULL,
+    `status` ENUM('active', 'inactive', 'graduated', 'transferred') NOT NULL DEFAULT 'active',
+    `notes` TEXT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
 
--- ============================================================
--- 5. parent_student — ຜູ້ປົກຄອງ ↔ ນັກຮຽນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS parent_student (
-    id                  INT PRIMARY KEY AUTO_INCREMENT,
-    parent_user_id      INT NOT NULL,
-    student_id          INT NOT NULL,
-    relationship_en     ENUM('father', 'mother', 'guardian', 'other') DEFAULT 'guardian',
-    relationship_lo     VARCHAR(50) DEFAULT 'ຜູ້ປົກຄອງ' COMMENT 'ຄວາມສຳພັນ ເຊັ່ນ: ພໍ່, ແມ່, ຜູ້ປົກຄອງ',
-    is_primary_contact  BOOLEAN DEFAULT TRUE,
+    UNIQUE INDEX `students_student_code_key`(`student_code`),
+    INDEX `students_status_idx`(`status`),
+    PRIMARY KEY (`student_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-    FOREIGN KEY (parent_user_id) REFERENCES users(user_id)     ON DELETE CASCADE,
-    FOREIGN KEY (student_id)     REFERENCES students(student_id) ON DELETE CASCADE,
-    UNIQUE KEY uq_parent_student (parent_user_id, student_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ຜູ້ປົກຄອງ ↔ ນັກຮຽນ | Parent-Student relationship';
+-- CreateTable
+CREATE TABLE `class_students` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `class_id` INTEGER NOT NULL,
+    `student_id` INTEGER NOT NULL,
+    `enrolled_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `left_at` DATETIME(3) NULL,
 
+    UNIQUE INDEX `class_students_class_id_student_id_key`(`class_id`, `student_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- ============================================================
--- 6. cards — ບັດ RFID/NFC
--- ============================================================
-CREATE TABLE IF NOT EXISTS cards (
-    card_id         INT PRIMARY KEY AUTO_INCREMENT,
-    card_uid        VARCHAR(50) UNIQUE NOT NULL COMMENT 'ລະຫັດຊິບໃນບັດ | RFID chip UID',
-    student_id      INT NOT NULL,
-    issued_date     DATE DEFAULT (CURRENT_DATE),
-    expired_date    DATE,
-    status          ENUM('active', 'lost', 'deactivated') DEFAULT 'active',
-    notes_en        VARCHAR(255),
-    notes_lo        VARCHAR(255),
-    issued_by       INT COMMENT 'admin user_id who issued the card',
+-- CreateTable
+CREATE TABLE `parent_student` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `parent_user_id` INTEGER NOT NULL,
+    `student_id` INTEGER NOT NULL,
+    `relationship` ENUM('father', 'mother', 'guardian', 'grandparent', 'sibling', 'uncle_aunt', 'other') NOT NULL DEFAULT 'guardian',
+    `is_primary_contact` BOOLEAN NOT NULL DEFAULT false,
 
-    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
-    FOREIGN KEY (issued_by)  REFERENCES users(user_id) ON DELETE SET NULL,
-    INDEX idx_card_uid  (card_uid),
-    INDEX idx_status    (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ບັດ RFID/NFC | Student RFID/NFC cards';
+    UNIQUE INDEX `parent_student_parent_user_id_student_id_key`(`parent_user_id`, `student_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `cards` (
+    `card_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `card_uid` VARCHAR(50) NOT NULL,
+    `student_id` INTEGER NOT NULL,
+    `issued_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `expired_date` DATE NULL,
+    `status` ENUM('active', 'lost', 'deactivated') NOT NULL DEFAULT 'active',
+    `notes` VARCHAR(255) NULL,
+    `issued_by` INTEGER NULL,
 
--- ============================================================
--- 7. attendance_logs — Check-in / Check-out
--- ============================================================
-CREATE TABLE IF NOT EXISTS attendance_logs (
-    log_id              INT PRIMARY KEY AUTO_INCREMENT,
-    student_id          INT NOT NULL,
-    card_id             INT,
-    log_type            ENUM('check_in', 'check_out') NOT NULL,
-    log_time            DATETIME DEFAULT CURRENT_TIMESTAMP,
-    gate_location_en    VARCHAR(50) COMMENT 'Gate location (English) e.g. Main Gate',
-    gate_location_lo    VARCHAR(50) COMMENT 'ຈຸດຕິດຕັ້ງ (ລາວ) ຕົວຢ່າງ: ປະຕູໃຫຍ່',
-    is_manual_entry     BOOLEAN DEFAULT FALSE COMMENT 'Admin ໃສ່ດ້ວຍມືບໍ່',
-    manual_entry_by     INT COMMENT 'user_id of admin who manually entered',
-    notified            BOOLEAN DEFAULT FALSE,
-    remark_en           VARCHAR(255) COMMENT 'Optional remark (English)',
-    remark_lo           VARCHAR(255) COMMENT 'ໝາຍເຫດ (ລາວ)',
+    UNIQUE INDEX `cards_card_uid_key`(`card_uid`),
+    INDEX `cards_status_idx`(`status`),
+    PRIMARY KEY (`card_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-    FOREIGN KEY (student_id)      REFERENCES students(student_id) ON DELETE CASCADE,
-    FOREIGN KEY (card_id)         REFERENCES cards(card_id) ON DELETE SET NULL,
-    FOREIGN KEY (manual_entry_by) REFERENCES users(user_id) ON DELETE SET NULL,
-    INDEX idx_student_date (student_id, log_time),
-    INDEX idx_log_type     (log_type),
-    INDEX idx_log_time     (log_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ບັນທຶກ Check-in/Check-out | Attendance records';
+-- CreateTable
+CREATE TABLE `attendance_logs` (
+    `log_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `card_id` INTEGER NULL,
+    `log_type` ENUM('check_in', 'check_out') NOT NULL,
+    `log_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `gate_location_en` VARCHAR(50) NULL,
+    `gate_location_lo` VARCHAR(50) NULL,
+    `is_manual_entry` BOOLEAN NOT NULL DEFAULT false,
+    `manual_entry_by` INTEGER NULL,
+    `notified` BOOLEAN NOT NULL DEFAULT false,
+    `remark` VARCHAR(255) NULL,
 
+    INDEX `attendance_logs_student_id_log_time_idx`(`student_id`, `log_time`),
+    INDEX `attendance_logs_log_type_idx`(`log_type`),
+    INDEX `attendance_logs_log_time_idx`(`log_time`),
+    PRIMARY KEY (`log_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- ============================================================
--- 8. subjects — ວິຊາຮຽນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS subjects (
-    subject_id      INT PRIMARY KEY AUTO_INCREMENT,
-    subject_name_en VARCHAR(100) NOT NULL COMMENT 'Subject name in English e.g. Mathematics',
-    subject_name_lo VARCHAR(100) NOT NULL COMMENT 'ຊື່ວິຊາລາວ ຕົວຢ່າງ: ຄະນິດສາດ',
-    subject_code    VARCHAR(20) UNIQUE COMMENT 'ລະຫັດວິຊາ e.g. MATH-01',
-    description_en  TEXT,
-    description_lo  TEXT,
-    teacher_id      INT COMMENT 'ອາຈານຮັບຜິດຊອບ',
-    class_id        INT,
-    credits         DECIMAL(3,1) DEFAULT 1.0,
-    is_active       BOOLEAN DEFAULT TRUE,
+-- CreateTable
+CREATE TABLE `daily_attendance` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `date` DATE NOT NULL,
+    `status` ENUM('present', 'absent', 'late', 'excused') NOT NULL,
+    `source` ENUM('card', 'teacher', 'leave') NOT NULL,
+    `first_check_in` DATETIME(3) NULL,
+    `note` VARCHAR(255) NULL,
+    `recorded_by` INTEGER NULL,
+    `updated_at` DATETIME(3) NOT NULL,
 
-    FOREIGN KEY (teacher_id) REFERENCES users(user_id) ON DELETE SET NULL,
-    FOREIGN KEY (class_id)   REFERENCES classes(class_id) ON DELETE SET NULL,
-    INDEX idx_teacher (teacher_id),
-    INDEX idx_class   (class_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ວິຊາຮຽນ | School subjects';
+    INDEX `daily_attendance_date_status_idx`(`date`, `status`),
+    UNIQUE INDEX `daily_attendance_student_id_date_key`(`student_id`, `date`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `subjects` (
+    `subject_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `subject_name_en` VARCHAR(100) NOT NULL,
+    `subject_name_lo` VARCHAR(100) NOT NULL,
+    `subject_code` VARCHAR(20) NULL,
+    `description_en` TEXT NULL,
+    `description_lo` TEXT NULL,
+    `credits` DECIMAL(3, 1) NOT NULL DEFAULT 1.0,
+    `is_active` BOOLEAN NOT NULL DEFAULT true,
 
--- ============================================================
--- 9. grade_types — ປະເພດຄະແນນ (ທົດສອບ, ການບ້ານ, ສອບເສັງ...)
--- ============================================================
-CREATE TABLE IF NOT EXISTS grade_types (
-    type_id         INT PRIMARY KEY AUTO_INCREMENT,
-    type_name_en    VARCHAR(100) NOT NULL COMMENT 'e.g. Mid-term Exam, Homework, Final Exam',
-    type_name_lo    VARCHAR(100) NOT NULL COMMENT 'ຕົວຢ່າງ: ສອບເສັງກາງພາກ, ການບ້ານ, ສອບເສັງສຸດພາກ',
-    weight_percent  DECIMAL(5,2) DEFAULT 100.00 COMMENT 'ນ້ຳໜັກ % ຂອງຄະແນນລວມ',
-    description_en  TEXT,
-    description_lo  TEXT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ປະເພດຄະແນນ | Grade/assessment categories';
+    UNIQUE INDEX `subjects_subject_code_key`(`subject_code`),
+    PRIMARY KEY (`subject_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `class_subjects` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `class_id` INTEGER NOT NULL,
+    `subject_id` INTEGER NOT NULL,
+    `teacher_id` INTEGER NULL,
+    `term_id` INTEGER NOT NULL,
 
--- ============================================================
--- 10. grades — ຄະແນນນັກຮຽນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS grades (
-    grade_id        INT PRIMARY KEY AUTO_INCREMENT,
-    student_id      INT NOT NULL,
-    subject_id      INT NOT NULL,
-    teacher_id      INT NOT NULL,
-    grade_type_id   INT COMMENT 'ອ້າງອີງ grade_types',
-    score           DECIMAL(5,2),
-    max_score       DECIMAL(5,2) DEFAULT 100,
-    grade_month     VARCHAR(7)   COMMENT 'ສົກຮຽນ ຕົວຢ່າງ: 2026-07',
-    remarks_en      TEXT COMMENT 'Teacher remarks in English',
-    remarks_lo      TEXT COMMENT 'ຄຳເຫັນຂອງອາຈານ (ລາວ)',
-    is_published    BOOLEAN DEFAULT FALSE COMMENT 'ຜູ້ປົກຄອງເຫັນໄດ້ບໍ',
-    recorded_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `class_subjects_teacher_id_idx`(`teacher_id`),
+    INDEX `class_subjects_term_id_idx`(`term_id`),
+    UNIQUE INDEX `class_subjects_class_id_subject_id_term_id_key`(`class_id`, `subject_id`, `term_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-    FOREIGN KEY (student_id)    REFERENCES students(student_id) ON DELETE CASCADE,
-    FOREIGN KEY (subject_id)    REFERENCES subjects(subject_id)  ON DELETE CASCADE,
-    FOREIGN KEY (teacher_id)    REFERENCES users(user_id)        ON DELETE RESTRICT,
-    FOREIGN KEY (grade_type_id) REFERENCES grade_types(type_id)  ON DELETE SET NULL,
-    INDEX idx_student_month (student_id, grade_month),
-    INDEX idx_subject       (subject_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ຄະແນນນັກຮຽນ | Student grades';
+-- CreateTable
+CREATE TABLE `grade_types` (
+    `type_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `type_name_en` VARCHAR(100) NOT NULL,
+    `type_name_lo` VARCHAR(100) NOT NULL,
+    `weight_percent` DECIMAL(5, 2) NOT NULL DEFAULT 100.00,
+    `description_en` TEXT NULL,
+    `description_lo` TEXT NULL,
 
+    PRIMARY KEY (`type_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- ============================================================
--- 11. shops — ຮ້ານຄ້າໃນໂຮງຮຽນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS shops (
-    shop_id         INT PRIMARY KEY AUTO_INCREMENT,
-    shop_name_en    VARCHAR(100) NOT NULL COMMENT 'Shop name in English e.g. Cafeteria',
-    shop_name_lo    VARCHAR(100) NOT NULL COMMENT 'ຊື່ຮ້ານລາວ ຕົວຢ່າງ: ໂຮງອາຫານ',
-    location_en     VARCHAR(100) COMMENT 'Location description (English)',
-    location_lo     VARCHAR(100) COMMENT 'ທີ່ຕັ້ງ (ລາວ)',
-    description_en  TEXT,
-    description_lo  TEXT,
-    is_active       BOOLEAN DEFAULT TRUE,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ຮ້ານຄ້າໃນໂຮງຮຽນ | In-school shops';
+-- CreateTable
+CREATE TABLE `grades` (
+    `grade_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `class_subject_id` INTEGER NOT NULL,
+    `teacher_id` INTEGER NOT NULL,
+    `grade_type_id` INTEGER NULL,
+    `score` DECIMAL(5, 2) NULL,
+    `max_score` DECIMAL(5, 2) NOT NULL DEFAULT 100,
+    `grade_month` VARCHAR(7) NULL,
+    `remarks` TEXT NULL,
+    `is_published` BOOLEAN NOT NULL DEFAULT false,
+    `recorded_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
 
+    INDEX `grades_student_id_grade_month_idx`(`student_id`, `grade_month`),
+    INDEX `grades_class_subject_id_idx`(`class_subject_id`),
+    PRIMARY KEY (`grade_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- ============================================================
--- 12. wallet_accounts — ບັນຊີເງິນຂອງນັກຮຽນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS wallet_accounts (
-    wallet_id       INT PRIMARY KEY AUTO_INCREMENT,
-    student_id      INT UNIQUE NOT NULL,
-    balance         DECIMAL(10,2) DEFAULT 0.00,
-    daily_limit     DECIMAL(10,2) DEFAULT NULL COMMENT 'ຈຳກັດຍອດໃຊ້ຈ່າຍຕໍ່ມື້',
-    status          ENUM('active', 'frozen') DEFAULT 'active',
-    currency_code   VARCHAR(3) DEFAULT 'LAK' COMMENT 'LAK = ກີບລາວ, THB, USD',
-    notes_en        VARCHAR(255),
-    notes_lo        VARCHAR(255),
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME ON UPDATE CURRENT_TIMESTAMP,
+-- CreateTable
+CREATE TABLE `shops` (
+    `shop_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `shop_name_en` VARCHAR(100) NOT NULL,
+    `shop_name_lo` VARCHAR(100) NOT NULL,
+    `location_en` VARCHAR(100) NULL,
+    `location_lo` VARCHAR(100) NULL,
+    `description_en` TEXT NULL,
+    `description_lo` TEXT NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT true,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ບັນຊີ E-Wallet ຂອງນັກຮຽນ | Student e-wallet accounts';
+    PRIMARY KEY (`shop_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `wallet_accounts` (
+    `wallet_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `balance` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    `status` ENUM('active', 'frozen') NOT NULL DEFAULT 'active',
+    `currency_code` VARCHAR(3) NOT NULL DEFAULT 'LAK',
+    `notes` VARCHAR(255) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
 
--- ============================================================
--- 13. wallet_transactions — ປະຫວັດທຸລະກຳ (Append-only, ຫ້າມ DELETE)
--- ============================================================
-CREATE TABLE IF NOT EXISTS wallet_transactions (
-    transaction_id      INT PRIMARY KEY AUTO_INCREMENT,
-    wallet_id           INT NOT NULL,
-    shop_id             INT COMMENT 'NULL ຖ້າເປັນການເຕີມເງິນ ຫຼືຄືນເງິນ',
-    transaction_type    ENUM('top_up', 'purchase', 'refund') NOT NULL,
-    amount              DECIMAL(10,2) NOT NULL,
-    balance_before      DECIMAL(10,2) NOT NULL COMMENT 'ຍອດກ່ອນທຸລະກຳ',
-    balance_after       DECIMAL(10,2) NOT NULL COMMENT 'ຍອດຫຼັງທຸລະກຳ',
-    description_en      VARCHAR(255) COMMENT 'Transaction description (English)',
-    description_lo      VARCHAR(255) COMMENT 'ລາຍລະອຽດທຸລະກຳ (ລາວ)',
-    reference_no        VARCHAR(50) UNIQUE COMMENT 'ເລກອ້າງອີງທຸລະກຳ',
-    processed_by        INT COMMENT 'user_id ຜູ້ດຳເນີນການ (admin/shop)',
-    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE INDEX `wallet_accounts_student_id_key`(`student_id`),
+    PRIMARY KEY (`wallet_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-    FOREIGN KEY (wallet_id) REFERENCES wallet_accounts(wallet_id),
-    FOREIGN KEY (shop_id)   REFERENCES shops(shop_id) ON DELETE SET NULL,
-    FOREIGN KEY (processed_by) REFERENCES users(user_id) ON DELETE SET NULL,
-    INDEX idx_wallet_date (wallet_id, created_at),
-    INDEX idx_type        (transaction_type),
-    INDEX idx_ref_no      (reference_no)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ປະຫວັດທຸລະກຳ E-Wallet | Wallet transaction history (append-only)';
+-- CreateTable
+CREATE TABLE `wallet_transactions` (
+    `transaction_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `wallet_id` INTEGER NOT NULL,
+    `shop_id` INTEGER NULL,
+    `transaction_type` ENUM('top_up', 'purchase', 'refund') NOT NULL,
+    `amount` DECIMAL(10, 2) NOT NULL,
+    `balance_before` DECIMAL(10, 2) NOT NULL,
+    `balance_after` DECIMAL(10, 2) NOT NULL,
+    `description_en` VARCHAR(255) NULL,
+    `description_lo` VARCHAR(255) NULL,
+    `reference_no` VARCHAR(50) NULL,
+    `processed_by` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
+    UNIQUE INDEX `wallet_transactions_reference_no_key`(`reference_no`),
+    INDEX `wallet_transactions_wallet_id_created_at_idx`(`wallet_id`, `created_at`),
+    INDEX `wallet_transactions_transaction_type_idx`(`transaction_type`),
+    PRIMARY KEY (`transaction_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- ============================================================
--- 14. top_up_requests — ຄຳຂໍເຕີມເງິນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS top_up_requests (
-    request_id      INT PRIMARY KEY AUTO_INCREMENT,
-    student_id      INT NOT NULL,
-    parent_user_id  INT NOT NULL,
-    amount          DECIMAL(10,2) NOT NULL,
-    method          ENUM('cash', 'mobile_banking', 'admin_manual') NOT NULL,
-    method_label_en VARCHAR(100) COMMENT 'e.g. BCEL One, LDB Mobile',
-    method_label_lo VARCHAR(100) COMMENT 'ຕົວຢ່າງ: BCEL ວັນ, LDB ໂມບາຍ',
-    status          ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
-    approved_by     INT COMMENT 'admin user_id',
-    reject_reason_en TEXT,
-    reject_reason_lo TEXT,
-    slip_url        VARCHAR(255) COMMENT 'ໄຟລ໌ slip ການໂອນ',
-    requested_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-    processed_at    DATETIME,
+-- CreateTable
+CREATE TABLE `top_up_requests` (
+    `request_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `parent_user_id` INTEGER NOT NULL,
+    `amount` DECIMAL(10, 2) NOT NULL,
+    `method` ENUM('cash', 'mobile_banking', 'admin_manual') NOT NULL,
+    `method_label_en` VARCHAR(100) NULL,
+    `method_label_lo` VARCHAR(100) NULL,
+    `status` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    `approved_by` INTEGER NULL,
+    `reject_reason` TEXT NULL,
+    `slip_url` VARCHAR(255) NULL,
+    `requested_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `processed_at` DATETIME(3) NULL,
+    `transaction_id` INTEGER NULL,
 
-    FOREIGN KEY (student_id)     REFERENCES students(student_id) ON DELETE CASCADE,
-    FOREIGN KEY (parent_user_id) REFERENCES users(user_id)       ON DELETE CASCADE,
-    FOREIGN KEY (approved_by)    REFERENCES users(user_id)       ON DELETE SET NULL,
-    INDEX idx_status      (status),
-    INDEX idx_student     (student_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ຄຳຂໍເຕີມເງິນ | Top-up requests';
+    UNIQUE INDEX `top_up_requests_transaction_id_key`(`transaction_id`),
+    INDEX `top_up_requests_status_idx`(`status`),
+    INDEX `top_up_requests_student_id_idx`(`student_id`),
+    PRIMARY KEY (`request_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `notifications` (
+    `notification_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `recipient_user_id` INTEGER NOT NULL,
+    `student_id` INTEGER NULL,
+    `type` ENUM('check_in', 'check_out', 'absence', 'grade', 'transaction', 'general') NOT NULL,
+    `channel` ENUM('sms', 'line', 'telegram', 'app_push', 'email') NOT NULL,
+    `message_en` TEXT NOT NULL,
+    `message_lo` TEXT NOT NULL,
+    `sent_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `delivered_at` DATETIME(3) NULL,
+    `status` ENUM('sent', 'failed', 'pending') NOT NULL DEFAULT 'pending',
+    `error_message` TEXT NULL,
 
--- ============================================================
--- 15. notifications — ບັນທຶກການແຈ້ງເຕືອນ
--- ============================================================
-CREATE TABLE IF NOT EXISTS notifications (
-    notification_id     INT PRIMARY KEY AUTO_INCREMENT,
-    recipient_user_id   INT NOT NULL,
-    student_id          INT,
-    type                ENUM('check_in','check_out','absence','grade','transaction','general') NOT NULL,
-    channel             ENUM('sms','line','telegram','app_push','email') NOT NULL,
-    message_en          TEXT NOT NULL COMMENT 'Notification message in English',
-    message_lo          TEXT NOT NULL COMMENT 'ຂໍ້ຄວາມແຈ້ງເຕືອນ (ລາວ)',
-    sent_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
-    delivered_at        DATETIME COMMENT 'ເວລາສົ່ງສຳເລັດ',
-    status              ENUM('sent','failed','pending') DEFAULT 'pending',
-    error_message       TEXT COMMENT 'Error detail if failed',
+    INDEX `notifications_recipient_user_id_idx`(`recipient_user_id`),
+    INDEX `notifications_type_idx`(`type`),
+    INDEX `notifications_status_idx`(`status`),
+    PRIMARY KEY (`notification_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-    FOREIGN KEY (recipient_user_id) REFERENCES users(user_id)     ON DELETE CASCADE,
-    FOREIGN KEY (student_id)        REFERENCES students(student_id) ON DELETE SET NULL,
-    INDEX idx_recipient (recipient_user_id),
-    INDEX idx_type      (type),
-    INDEX idx_status    (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ປະຫວັດການແຈ້ງເຕືອນ | Notification history';
+-- CreateTable
+CREATE TABLE `spending_limits` (
+    `limit_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `daily_max` DECIMAL(10, 2) NULL,
+    `weekly_max` DECIMAL(10, 2) NULL,
+    `per_transaction_max` DECIMAL(10, 2) NULL,
+    `alert_threshold` DECIMAL(10, 2) NULL,
+    `notes` VARCHAR(255) NULL,
+    `set_by` INTEGER NOT NULL,
+    `updated_at` DATETIME(3) NULL,
 
+    UNIQUE INDEX `spending_limits_student_id_key`(`student_id`),
+    PRIMARY KEY (`limit_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- ============================================================
--- 16. spending_limits — ຂອບເຂດການໃຊ້ຈ່າຍ (ຜູ້ປົກຄອງຕັ້ງ)
--- ============================================================
-CREATE TABLE IF NOT EXISTS spending_limits (
-    limit_id            INT PRIMARY KEY AUTO_INCREMENT,
-    student_id          INT UNIQUE NOT NULL,
-    daily_max           DECIMAL(10,2) COMMENT 'ວົງເງິນໃຊ້ຈ່າຍຕໍ່ວັນ',
-    weekly_max          DECIMAL(10,2) COMMENT 'ວົງເງິນໃຊ້ຈ່າຍຕໍ່ອາທິດ',
-    per_transaction_max DECIMAL(10,2) COMMENT 'ວົງເງິນຕໍ່ 1 ທຸລະກຳ',
-    blocked_shops       JSON COMMENT 'Array of blocked shop_ids e.g. [1, 3]',
-    alert_threshold     DECIMAL(10,2) COMMENT 'ແຈ້ງເຕືອນເມື່ອຍອດຕ່ຳກວ່ານີ້',
-    notes_en            VARCHAR(255),
-    notes_lo            VARCHAR(255),
-    set_by              INT NOT NULL COMMENT 'parent user_id',
-    updated_at          DATETIME ON UPDATE CURRENT_TIMESTAMP,
+-- CreateTable
+CREATE TABLE `blocked_shops` (
+    `student_id` INTEGER NOT NULL,
+    `shop_id` INTEGER NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
-    FOREIGN KEY (set_by)     REFERENCES users(user_id)       ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ຂອບເຂດການໃຊ້ຈ່າຍ | Parent-controlled spending limits';
+    INDEX `blocked_shops_shop_id_idx`(`shop_id`),
+    PRIMARY KEY (`student_id`, `shop_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `i18n_messages` (
+    `message_key` VARCHAR(100) NOT NULL,
+    `message_en` TEXT NOT NULL,
+    `message_lo` TEXT NOT NULL,
+    `description` VARCHAR(255) NULL,
+    `updated_at` DATETIME(3) NULL,
 
--- ============================================================
--- 17. i18n_messages — ຂໍ້ຄວາມ Template ສຳລັບແຈ້ງເຕືອນ 2 ພາສາ
--- ============================================================
-CREATE TABLE IF NOT EXISTS i18n_messages (
-    message_key     VARCHAR(100) PRIMARY KEY COMMENT 'e.g. notify.check_in, notify.absence',
-    message_en      TEXT NOT NULL COMMENT 'Template in English (supports {{variables}})',
-    message_lo      TEXT NOT NULL COMMENT 'Template in Lao (ຮອງຮັບ {{ຕົວແປ}})',
-    description     VARCHAR(255) COMMENT 'Admin note about this message',
-    updated_at      DATETIME ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ຂໍ້ຄວາມ template 2 ພາສາ | Bilingual notification message templates';
+    PRIMARY KEY (`message_key`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `academic_terms` (
+    `term_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `academic_year` VARCHAR(9) NOT NULL,
+    `term_name_en` VARCHAR(50) NOT NULL,
+    `term_name_lo` VARCHAR(50) NOT NULL,
+    `start_date` DATE NOT NULL,
+    `end_date` DATE NOT NULL,
+    `status` ENUM('active', 'upcoming', 'completed') NOT NULL DEFAULT 'upcoming',
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-SET FOREIGN_KEY_CHECKS = 1;
+    PRIMARY KEY (`term_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `schedules` (
+    `schedule_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `class_subject_id` INTEGER NOT NULL,
+    `day_of_week` INTEGER NOT NULL,
+    `start_time` TIME NOT NULL,
+    `end_time` TIME NOT NULL,
+    `room_number` VARCHAR(50) NULL,
+
+    INDEX `schedules_class_subject_id_day_of_week_idx`(`class_subject_id`, `day_of_week`),
+    PRIMARY KEY (`schedule_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `leave_requests` (
+    `leave_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `parent_user_id` INTEGER NOT NULL,
+    `start_date` DATE NOT NULL,
+    `end_date` DATE NOT NULL,
+    `reason` TEXT NULL,
+    `document_url` VARCHAR(255) NULL,
+    `status` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    `approved_by` INTEGER NULL,
+    `requested_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `processed_at` DATETIME(3) NULL,
+
+    INDEX `leave_requests_student_id_idx`(`student_id`),
+    INDEX `leave_requests_status_idx`(`status`),
+    PRIMARY KEY (`leave_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `announcements` (
+    `announcement_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `title_en` VARCHAR(255) NOT NULL,
+    `title_lo` VARCHAR(255) NOT NULL,
+    `content_en` TEXT NOT NULL,
+    `content_lo` TEXT NOT NULL,
+    `target_audience` ENUM('all', 'teachers', 'parents', 'class') NOT NULL DEFAULT 'all',
+    `class_id` INTEGER NULL,
+    `publish_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `expiry_date` DATETIME(3) NULL,
+    `created_by` INTEGER NOT NULL,
+
+    INDEX `announcements_publish_date_idx`(`publish_date`),
+    PRIMARY KEY (`announcement_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `users` ADD CONSTRAINT `users_role_id_fkey` FOREIGN KEY (`role_id`) REFERENCES `roles`(`role_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `refresh_tokens` ADD CONSTRAINT `refresh_tokens_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `audit_logs` ADD CONSTRAINT `audit_logs_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `teachers` ADD CONSTRAINT `teachers_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `parents` ADD CONSTRAINT `parents_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `classes` ADD CONSTRAINT `classes_homeroom_teacher_id_fkey` FOREIGN KEY (`homeroom_teacher_id`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `classes` ADD CONSTRAINT `classes_homeroom_teacher_profile_fkey` FOREIGN KEY (`homeroom_teacher_id`) REFERENCES `teachers`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `class_students` ADD CONSTRAINT `class_students_class_id_fkey` FOREIGN KEY (`class_id`) REFERENCES `classes`(`class_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `class_students` ADD CONSTRAINT `class_students_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `parent_student` ADD CONSTRAINT `parent_student_parent_user_id_fkey` FOREIGN KEY (`parent_user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `parent_student` ADD CONSTRAINT `parent_student_parent_profile_fkey` FOREIGN KEY (`parent_user_id`) REFERENCES `parents`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `parent_student` ADD CONSTRAINT `parent_student_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `cards` ADD CONSTRAINT `cards_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `cards` ADD CONSTRAINT `cards_issued_by_fkey` FOREIGN KEY (`issued_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `attendance_logs` ADD CONSTRAINT `attendance_logs_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `attendance_logs` ADD CONSTRAINT `attendance_logs_card_id_fkey` FOREIGN KEY (`card_id`) REFERENCES `cards`(`card_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `attendance_logs` ADD CONSTRAINT `attendance_logs_manual_entry_by_fkey` FOREIGN KEY (`manual_entry_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `daily_attendance` ADD CONSTRAINT `daily_attendance_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `daily_attendance` ADD CONSTRAINT `daily_attendance_recorded_by_fkey` FOREIGN KEY (`recorded_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `class_subjects` ADD CONSTRAINT `class_subjects_class_id_fkey` FOREIGN KEY (`class_id`) REFERENCES `classes`(`class_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `class_subjects` ADD CONSTRAINT `class_subjects_subject_id_fkey` FOREIGN KEY (`subject_id`) REFERENCES `subjects`(`subject_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `class_subjects` ADD CONSTRAINT `class_subjects_teacher_id_fkey` FOREIGN KEY (`teacher_id`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `class_subjects` ADD CONSTRAINT `class_subjects_teacher_profile_fkey` FOREIGN KEY (`teacher_id`) REFERENCES `teachers`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `class_subjects` ADD CONSTRAINT `class_subjects_term_id_fkey` FOREIGN KEY (`term_id`) REFERENCES `academic_terms`(`term_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `grades` ADD CONSTRAINT `grades_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `grades` ADD CONSTRAINT `grades_class_subject_id_fkey` FOREIGN KEY (`class_subject_id`) REFERENCES `class_subjects`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `grades` ADD CONSTRAINT `grades_teacher_id_fkey` FOREIGN KEY (`teacher_id`) REFERENCES `users`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `grades` ADD CONSTRAINT `grades_teacher_profile_fkey` FOREIGN KEY (`teacher_id`) REFERENCES `teachers`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `grades` ADD CONSTRAINT `grades_grade_type_id_fkey` FOREIGN KEY (`grade_type_id`) REFERENCES `grade_types`(`type_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `wallet_accounts` ADD CONSTRAINT `wallet_accounts_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_wallet_id_fkey` FOREIGN KEY (`wallet_id`) REFERENCES `wallet_accounts`(`wallet_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_shop_id_fkey` FOREIGN KEY (`shop_id`) REFERENCES `shops`(`shop_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_processed_by_fkey` FOREIGN KEY (`processed_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `top_up_requests` ADD CONSTRAINT `top_up_requests_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `top_up_requests` ADD CONSTRAINT `top_up_requests_parent_user_id_fkey` FOREIGN KEY (`parent_user_id`) REFERENCES `users`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `top_up_requests` ADD CONSTRAINT `top_up_requests_parent_profile_fkey` FOREIGN KEY (`parent_user_id`) REFERENCES `parents`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `top_up_requests` ADD CONSTRAINT `top_up_requests_approved_by_fkey` FOREIGN KEY (`approved_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `top_up_requests` ADD CONSTRAINT `top_up_requests_transaction_id_fkey` FOREIGN KEY (`transaction_id`) REFERENCES `wallet_transactions`(`transaction_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `notifications` ADD CONSTRAINT `notifications_recipient_user_id_fkey` FOREIGN KEY (`recipient_user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `notifications` ADD CONSTRAINT `notifications_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `spending_limits` ADD CONSTRAINT `spending_limits_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `spending_limits` ADD CONSTRAINT `spending_limits_set_by_fkey` FOREIGN KEY (`set_by`) REFERENCES `users`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `blocked_shops` ADD CONSTRAINT `blocked_shops_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `blocked_shops` ADD CONSTRAINT `blocked_shops_shop_id_fkey` FOREIGN KEY (`shop_id`) REFERENCES `shops`(`shop_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `schedules` ADD CONSTRAINT `schedules_class_subject_id_fkey` FOREIGN KEY (`class_subject_id`) REFERENCES `class_subjects`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `leave_requests` ADD CONSTRAINT `leave_requests_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `leave_requests` ADD CONSTRAINT `leave_requests_parent_user_id_fkey` FOREIGN KEY (`parent_user_id`) REFERENCES `users`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `leave_requests` ADD CONSTRAINT `leave_requests_parent_profile_fkey` FOREIGN KEY (`parent_user_id`) REFERENCES `parents`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `leave_requests` ADD CONSTRAINT `leave_requests_approved_by_fkey` FOREIGN KEY (`approved_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `announcements` ADD CONSTRAINT `announcements_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `announcements` ADD CONSTRAINT `announcements_class_id_fkey` FOREIGN KEY (`class_id`) REFERENCES `classes`(`class_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
