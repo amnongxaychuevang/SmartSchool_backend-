@@ -50,7 +50,7 @@ import {
   leaveRequestCreateSchema, leaveRequestStatusUpdateSchema,
   announcementCreateSchema, announcementUpdateSchema,
   academicTermCreateSchema, academicTermUpdateSchema,
-  classSubjectCreateSchema, classSubjectUpdateSchema,
+  classSubjectCreateSchema, classSubjectUpdateSchema, scheduleSchema,
   settingsSaveSchema,
 } from '../../interfaces/validators/schemas';
 
@@ -130,7 +130,10 @@ router.put('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRol
 router.delete('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), classController.delete);
 
 // ─── Schedules (Teacher) ────────────────────────────────
-router.get('/schedules', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher']), scheduleController.list);
+router.get('/schedules', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher', 'admin']), scheduleController.list);
+router.post('/schedules', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(scheduleSchema), scheduleController.create);
+router.put('/schedules/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(scheduleSchema), scheduleController.update);
+router.delete('/schedules/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), scheduleController.delete);
 
 // ─── Leave Requests (Teacher) ───────────────────────────
 router.get('/leave-requests', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher', 'admin']), leaveRequestController.list);

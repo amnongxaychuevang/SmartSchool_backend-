@@ -207,6 +207,16 @@ export const gradeCreateSchema = z.object({
   path: ['classSubjectId'],
 });
 
+// ─── Timetable slots ────────────────────────────────────
+const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM');
+export const scheduleSchema = z.object({
+  classSubjectId: z.coerce.number().int().positive(),
+  dayOfWeek: z.coerce.number().int().min(0).max(6), // 0 = Sunday
+  startTime: clockTime,
+  endTime: clockTime,
+  roomNumber: z.string().max(50).nullable().optional(),
+});
+
 // ─── Class subjects (subject taught to a class in a term) ───
 export const classSubjectCreateSchema = z.object({
   classId: z.coerce.number().int().positive(),
