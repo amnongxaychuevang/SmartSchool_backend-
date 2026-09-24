@@ -37,6 +37,10 @@ class StudentRepository {
             include: { class: { select: { classNameEn: true, classNameLo: true } } },
             take: 1,
           },
+          parentStudents: {
+            include: { parent: { select: { userId: true, fullNameEn: true, fullNameLo: true, phoneNumber: true } } },
+            take: 1, // Only need the primary or first parent for the table
+          },
         },
       }),
       prisma.student.count({ where }),

@@ -4,6 +4,21 @@ import RefreshTokenUseCase from '../../application/use-cases/auth/RefreshTokenUs
 import UserRepository from '../../infrastructure/repositories/UserRepository';
 import refreshTokenRepository from '../../infrastructure/repositories/RefreshTokenRepository';
 import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
+import roleRepository from '../../infrastructure/repositories/RoleRepository';
+
+// The client needs to know which portal the user belongs to and what they may do
+// there (to route them and to show only the menus they can use). The server still
+// checks every request; this is for the UI only.
+async function withAccess<T extends { role: string }>(user: T) {
+  const access = await roleRepository.accessFor(user.role);
+  return {
+    ...user,
+    portal: access?.portal ?? null,
+    permissions: access?.permissions ?? [],
+    roleNameEn: access?.roleNameEn ?? user.role,
+    roleNameLo: access?.roleNameLo ?? user.role,
+  };
+}
 
 // Dependency wiring — only happens here, controllers are thin
 const userRepository = new UserRepository();
@@ -25,7 +40,7 @@ class AuthController {
         ipAddress: req.ip,
       });
 
-      res.json({ success: true, data: result });
+      res.json({ success: true, data: { ...result, user: await withAccess(result.user) } });
     } catch (error) {
       if (error.message === 'Invalid credentials' || error.message === 'Account is inactive') {
         auditLogRepository.log({
@@ -48,7 +63,7 @@ class AuthController {
     try {
       // req.user is set by AuthMiddleware.verifyToken
       const user = await getMeUseCase.execute(req.user.userId);
-      res.json({ success: true, data: { user } });
+      res.json({ success: true, data: { user: await withAccess(user) } });
     } catch (error) {
       // GetMeUseCase throws 'User not found' — surface as 404
       if (error.message === 'User not found') {
@@ -67,7 +82,7 @@ class AuthController {
     try {
       const { refreshToken } = req.body;
       const result = await refreshTokenUseCase.execute(refreshToken, req.headers['user-agent']);
-      res.json({ success: true, data: result });
+      res.json({ success: true, data: { ...result, user: await withAccess(result.user) } });
     } catch (error) {
       if (error.message === 'Invalid or expired refresh token' || error.message === 'Account is inactive') {
         return res.status(401).json({ success: false, message: error.message });

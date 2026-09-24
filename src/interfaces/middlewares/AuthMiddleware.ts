@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../../infrastructure/database/PrismaClient';
+import roleRepository from '../../infrastructure/repositories/RoleRepository';
+import type { Permission } from '../../domain/permissions';
 
 const AuthMiddleware = {
   verifyToken: (req, res, next) => {
@@ -37,6 +39,26 @@ const AuthMiddleware = {
         return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions' });
       }
       next();
+    };
+  },
+
+  /**
+   * Admin-portal authorization: the user's role must hold `permission` (or any
+   * one of several), and the built-in admin role holds all. `alsoRoles` lets the
+   * teacher/parent portals through as before — their controllers scope the data.
+   */
+  authorize: (permission: Permission | Permission[], alsoRoles: string[] = []) => {
+    const anyOf = Array.isArray(permission) ? permission : [permission];
+    return async (req, res, next) => {
+      try {
+        if (!req.user) return res.status(401).json({ success: false, message: 'No token provided' });
+        if (alsoRoles.includes(req.user.role)) return next();
+        const access = await roleRepository.accessFor(req.user.role);
+        if (access?.portal === 'admin' && anyOf.some((p) => access.permissions.includes(p))) return next();
+        return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions', permission });
+      } catch (err) {
+        next(err);
+      }
     };
   },
 

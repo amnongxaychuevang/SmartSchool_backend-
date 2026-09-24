@@ -24,6 +24,20 @@ class StudentController {
     }
   }
 
+  async getStatuses(req, res, next) {
+    try {
+      const statuses = [
+        { code: 'active', labelKey: 'common.active' },
+        { code: 'inactive', labelKey: 'common.inactive' },
+        { code: 'graduated', labelKey: 'students.graduated' },
+        { code: 'transferred', labelKey: 'students.transferred' }
+      ];
+      res.json({ success: true, data: { statuses } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async get(req, res, next) {
     try {
       const student = await studentRepository.findById(req.params.id);

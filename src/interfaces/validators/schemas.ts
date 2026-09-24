@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ALL_PERMISSIONS } from '../../domain/permissions';
 
 // ─── Auth ───────────────────────────────────────────────
 export const loginSchema = z.object({
@@ -20,6 +21,13 @@ export const attendanceScanSchema = z.object({
 });
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+export const attendanceReportQuerySchema = z.object({
+  range: z.enum(['today', '7d', '30d']).optional(),
+});
+export const absenceNotifySchema = z.object({
+  studentId: z.coerce.number().int().positive(),
+  date: isoDate,
+});
 export const dailyAttendanceQuerySchema = z.object({
   classId: z.coerce.number().int().positive(),
   date: isoDate,
@@ -266,11 +274,14 @@ export const notificationCreateSchema = z.object({
 });
 
 // ─── Spending limits (used by both the admin route and the parent-portal route) ───
+// null clears a limit ("no limit"). It must stay null: z.coerce.number() would turn
+// it into 0, which the purchase check treats as "nothing may be spent".
+const optionalMoney = z.union([z.null(), z.coerce.number().nonnegative()]).optional();
 export const spendingLimitUpsertSchema = z.object({
-  dailyMax: z.coerce.number().nonnegative().optional(),
-  weeklyMax: z.coerce.number().nonnegative().optional(),
-  perTransactionMax: z.coerce.number().nonnegative().optional(),
-  alertThreshold: z.coerce.number().nonnegative().optional(),
+  dailyMax: optionalMoney,
+  weeklyMax: optionalMoney,
+  perTransactionMax: optionalMoney,
+  alertThreshold: optionalMoney,
   blockedShops: z.array(z.coerce.number().int().positive()).optional(),
   notes: z.string().max(255).optional(),
 });
@@ -315,7 +326,69 @@ export const academicTermCreateSchema = z.object(academicTermBase);
 export const academicTermUpdateSchema = z.object(academicTermBase).partial();
 
 // ─── Settings — free-form key/value pairs, so only the shape is checked ───
-export const settingsSaveSchema = z.record(
-  z.string(),
-  z.union([z.string(), z.number(), z.boolean()])
-);
+// Only known setting groups are accepted, each with a fixed shape.
+// (Academic years and terms are managed as AcademicTerm records, not settings.)
+export const settingsSaveSchema = z.object({
+  schoolInfo: z.object({
+    schoolNameEn: z.string().min(1).max(150),
+    schoolNameLo: z.string().min(1).max(150),
+    contactEmail: z.union([z.email().max(150), z.literal('')]).optional(),
+    contactPhone: z.string().max(30).optional(),
+    addressEn: z.string().max(255).optional(),
+    addressLo: z.string().max(255).optional(),
+  }).optional(),
+}).strict();
+
+// ─── Roles & permissions ────────────────────────────────
+const permissionList = z.array(z.enum(ALL_PERMISSIONS as [string, ...string[]]));
+export const roleCreateSchema = z.object({
+  code: z.string().regex(/^[a-z][a-z0-9_]{1,48}$/, 'Use lowercase letters, digits and _'),
+  nameEn: z.string().min(1).max(100),
+  nameLo: z.string().min(1).max(100),
+  permissions: permissionList.default([]),
+});
+export const roleUpdateSchema = z.object({
+  nameEn: z.string().min(1).max(100).optional(),
+  nameLo: z.string().min(1).max(100).optional(),
+  permissions: permissionList.optional(),
+});
+
+// ─── Fees ───────────────────────────────────────────────
+const feeTypeBase = {
+  nameEn: z.string().min(1).max(100),
+  nameLo: z.string().min(1).max(100),
+  descriptionEn: z.string().optional(),
+  descriptionLo: z.string().optional(),
+  isActive: z.boolean().optional(),
+};
+export const feeTypeCreateSchema = z.object(feeTypeBase);
+export const feeTypeUpdateSchema = z.object(feeTypeBase).partial();
+
+const academicYearString = z.string().regex(/^d{4}-d{4}$/, 'Expected e.g. 2026-2027');
+const kip = z.coerce.number().int('Whole kip only').positive();
+export const feeStructureCreateSchema = z.object({
+  feeTypeId: z.coerce.number().int().positive(),
+  academicYear: academicYearString,
+  termId: z.coerce.number().int().positive().nullable().optional(),
+  classId: z.coerce.number().int().positive().nullable().optional(),
+  amount: kip,
+  dueDate: z.coerce.date(),
+  notes: z.string().max(255).optional(),
+});
+export const feeStructureUpdateSchema = feeStructureCreateSchema.partial();
+
+export const invoiceUpdateSchema = z.object({
+  discount: z.coerce.number().int().nonnegative().optional(),
+  dueDate: z.coerce.date().optional(),
+  notes: z.string().max(255).optional(),
+});
+export const invoiceVoidSchema = z.object({ reason: z.string().min(1).max(255) });
+export const feePaymentSchema = z.object({
+  amount: kip,
+  method: z.enum(['cash', 'bank_transfer']),
+  referenceNo: z.string().max(100).optional(),
+  notes: z.string().max(255).optional(),
+  paidAt: z.coerce.date().optional(),
+}).refine((p) => p.method !== 'bank_transfer' || !!p.referenceNo, {
+  message: 'A bank transfer needs its reference number', path: ['referenceNo'],
+});

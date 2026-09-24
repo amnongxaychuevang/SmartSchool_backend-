@@ -12,11 +12,8 @@ class SettingsController {
 
   async save(req, res, next) {
     try {
-      const settings = req.body; // { schoolNameEn: '...', contactEmail: '...' }
-      if (!settings || typeof settings !== 'object') {
-        return res.status(400).json({ success: false, message: 'Invalid settings payload' });
-      }
-      const saved = await settingsRepository.upsertMany(settings);
+      // Validated by settingsSaveSchema, e.g. { schoolInfo: { schoolNameEn, ... } }.
+      const saved = await settingsRepository.upsertMany(req.body, req.user?.userId);
       res.json({ success: true, data: { settings: saved } });
     } catch (error) {
       next(error);

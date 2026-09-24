@@ -24,10 +24,10 @@ class ScanCard {
     // 1. Validate Card
     const card = await this.cardRepository.findByUid(cardUid);
     if (!card) {
-      throw new Error('Card not found');
+      throw Object.assign(new Error('Card not found'), { statusCode: 404 });
     }
     if (card.status !== 'active') {
-      throw new Error(`Card is ${card.status}`);
+      throw Object.assign(new Error(`Card is ${card.status}`), { statusCode: 409 });
     }
 
     // 2. Determine if Check-in or Check-out

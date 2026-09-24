@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "db:sql": "node scripts/generate-schema-sql.js"
+    "db:sql": "node scripts/generate-schema-sql.js",
+    "db:seed-demo": "ts-node -T prisma/seed-demo.ts",
+    "db:seed-demo:reset": "ts-node -T prisma/seed-demo.ts --reset"
   },
   "keywords": [],
   "author": "",

@@ -7,15 +7,39 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Role {
-  roleId Int    @id @default(autoincrement()) @map("role_id")
-  code   String @unique @db.VarChar(50)
-  nameEn String @map("name_en") @db.VarChar(100)
-  nameLo String @map("name_lo") @db.VarChar(100)
+// Which app a role signs in to. Staff roles (bursar, registrar, ...) use the admin
+// portal with a subset of permissions; teacher and parent portals are scoped by role.
+enum RolePortal {
+  admin
+  teacher
+  parent
+}
 
-  users User[]
+model Role {
+  roleId   Int        @id @default(autoincrement()) @map("role_id")
+  code     String     @unique @db.VarChar(50)
+  nameEn   String     @map("name_en") @db.VarChar(100)
+  nameLo   String     @map("name_lo") @db.VarChar(100)
+  portal   RolePortal @default(admin)
+  // admin, teacher and parent ship with the system and cannot be deleted.
+  isSystem Boolean    @default(false) @map("is_system")
+
+  users       User[]
+  permissions RolePermission[]
 
   @@map("roles")
+}
+
+// Permission keys are defined in code (src/domain/permissions.ts); a row grants one
+// to a role. The admin role implicitly has every permission and needs no rows.
+model RolePermission {
+  roleId     Int    @map("role_id")
+  permission String @db.VarChar(64)
+
+  role Role @relation(fields: [roleId], references: [roleId], onDelete: Cascade)
+
+  @@id([roleId, permission])
+  @@map("role_permissions")
 }
 
 enum LangPref {
@@ -61,6 +85,10 @@ model User {
   recordedAttendance DailyAttendance[] @relation("DailyAttendanceRecorder")
 
   taughtClassSubjects ClassSubject[] @relation("ClassSubjectTeacher")
+
+  createdFeeStructures FeeStructure[] @relation("FeeStructureCreator")
+  issuedInvoices       Invoice[]      @relation("InvoiceIssuer")
+  receivedFeePayments  FeePayment[]   @relation("FeePaymentReceiver")
 
   @@index([roleId])
   @@map("users")
@@ -183,6 +211,7 @@ model Class {
   announcements Announcement[]
 
   classSubjects ClassSubject[]
+  feeStructures FeeStructure[]
 
   @@index([academicYear])
   @@map("classes")
@@ -239,6 +268,7 @@ model Student {
   spendingLimit   SpendingLimit?
   blockedShops    BlockedShop[]
   leaveRequests   LeaveRequest[]
+  invoices        Invoice[]
 
   @@index([status])
   @@map("students")
@@ -664,6 +694,7 @@ model AcademicTerm {
   createdAt    DateTime   @default(now()) @map("created_at")
 
   classSubjects ClassSubject[]
+  feeStructures FeeStructure[]
 
   @@map("academic_terms")
 }
@@ -735,4 +766,115 @@ model Announcement {
 
   @@index([publishDate])
   @@map("announcements")
+}
+
+// School-wide configuration as key → JSON value (e.g. "schoolInfo" → { schoolNameEn, ... }).
+// Academic years and terms are NOT stored here: they live in AcademicTerm.
+model SchoolSetting {
+  key       String   @id @db.VarChar(100)
+  value     Json
+  updatedBy Int?     @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("school_settings")
+}
+
+// ─── Fees ────────────────────────────────────────────────
+// A fee type is what is charged (tuition, books, uniform, ...). A fee structure
+// says how much, for which school year / term / class, and when it is due.
+// Generating a structure creates one invoice per student it applies to;
+// payments are recorded against invoices and keep paidAmount/status current.
+
+model FeeType {
+  feeTypeId     Int      @id @default(autoincrement()) @map("fee_type_id")
+  nameEn        String   @map("name_en") @db.VarChar(100)
+  nameLo        String   @map("name_lo") @db.VarChar(100)
+  descriptionEn String?  @map("description_en") @db.Text
+  descriptionLo String?  @map("description_lo") @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  structures FeeStructure[]
+
+  @@map("fee_types")
+}
+
+model FeeStructure {
+  feeStructureId Int      @id @default(autoincrement()) @map("fee_structure_id")
+  feeTypeId      Int      @map("fee_type_id")
+  academicYear   String   @map("academic_year") @db.VarChar(9)
+  termId         Int?     @map("term_id")
+  classId        Int?     @map("class_id") // null = every active student in that school year
+  amount         Decimal  @db.Decimal(12, 2)
+  dueDate        DateTime @map("due_date") @db.Date
+  notes          String?  @db.VarChar(255)
+  createdBy      Int?     @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  feeType  FeeType       @relation(fields: [feeTypeId], references: [feeTypeId], onDelete: Restrict)
+  term     AcademicTerm? @relation(fields: [termId], references: [termId], onDelete: Restrict)
+  class    Class?        @relation(fields: [classId], references: [classId], onDelete: Restrict)
+  creator  User?         @relation("FeeStructureCreator", fields: [createdBy], references: [userId], onDelete: SetNull)
+  invoices Invoice[]
+
+  @@index([academicYear])
+  @@map("fee_structures")
+}
+
+enum InvoiceStatus {
+  unpaid
+  partial
+  paid
+  void
+}
+
+model Invoice {
+  invoiceId      Int           @id @default(autoincrement()) @map("invoice_id")
+  invoiceNo      String        @unique @map("invoice_no") @db.VarChar(30)
+  studentId      Int           @map("student_id")
+  feeStructureId Int           @map("fee_structure_id")
+  amount         Decimal       @db.Decimal(12, 2)
+  discount       Decimal       @default(0) @db.Decimal(12, 2)
+  paidAmount     Decimal       @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  dueDate        DateTime      @map("due_date") @db.Date
+  status         InvoiceStatus @default(unpaid)
+  notes          String?       @db.VarChar(255)
+  voidReason     String?       @map("void_reason") @db.VarChar(255)
+  issuedBy       Int?          @map("issued_by")
+  issuedAt       DateTime      @default(now()) @map("issued_at")
+
+  student      Student      @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  feeStructure FeeStructure @relation(fields: [feeStructureId], references: [feeStructureId], onDelete: Restrict)
+  issuer       User?        @relation("InvoiceIssuer", fields: [issuedBy], references: [userId], onDelete: SetNull)
+  payments     FeePayment[]
+
+  // A student is billed at most once per fee structure.
+  @@unique([studentId, feeStructureId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+enum FeePaymentMethod {
+  cash
+  bank_transfer
+}
+
+model FeePayment {
+  paymentId   Int              @id @default(autoincrement()) @map("payment_id")
+  receiptNo   String           @unique @map("receipt_no") @db.VarChar(30)
+  invoiceId   Int              @map("invoice_id")
+  amount      Decimal          @db.Decimal(12, 2)
+  method      FeePaymentMethod
+  referenceNo String?          @map("reference_no") @db.VarChar(100) // bank transfer reference
+  notes       String?          @db.VarChar(255)
+  receivedBy  Int?             @map("received_by")
+  paidAt      DateTime         @default(now()) @map("paid_at")
+
+  invoice  Invoice @relation(fields: [invoiceId], references: [invoiceId], onDelete: Cascade)
+  receiver User?   @relation("FeePaymentReceiver", fields: [receivedBy], references: [userId], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([paidAt])
+  @@map("fee_payments")
 }

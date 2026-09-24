@@ -1,11 +1,21 @@
 import prisma from '../database/PrismaClient';
 
 class CardRepository {
-  async findMany({ studentId, status, page = 1, limit = 20 }: any = {}) {
+  async findMany({ studentId, status, search, page = 1, limit = 20 }: any = {}) {
     const skip = (page - 1) * limit;
+    const q = typeof search === 'string' ? search.trim() : '';
     const where = {
       ...(studentId ? { studentId: parseInt(studentId) } : {}),
       ...(status ? { status } : {}),
+      // Card UID, student code or either name.
+      ...(q ? {
+        OR: [
+          { cardUid: { contains: q } },
+          { student: { studentCode: { contains: q } } },
+          { student: { fullNameEn: { contains: q } } },
+          { student: { fullNameLo: { contains: q } } },
+        ],
+      } : {}),
     };
 
     const [cards, total] = await Promise.all([

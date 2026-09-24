@@ -4,17 +4,18 @@ const prisma = new PrismaClient();
 
 async function main() {
   // Always seed roles (safe with upsert)
+  // The three built-in roles; each signs in to its own portal and cannot be deleted.
   const roles = [
-    { code: 'admin', nameEn: 'Admin', nameLo: 'ແອັດມິນ' },
-    { code: 'teacher', nameEn: 'Teacher', nameLo: 'ອາຈານ' },
-    { code: 'parent', nameEn: 'Parent', nameLo: 'ຜູ້ປົກຄອງ' }
+    { code: 'admin', nameEn: 'Admin', nameLo: 'ແອັດມິນ', portal: 'admin' as const, isSystem: true },
+    { code: 'teacher', nameEn: 'Teacher', nameLo: 'ອາຈານ', portal: 'teacher' as const, isSystem: true },
+    { code: 'parent', nameEn: 'Parent', nameLo: 'ຜູ້ປົກຄອງ', portal: 'parent' as const, isSystem: true }
   ];
 
   let adminRole = null;
   for (const role of roles) {
     const r = await prisma.role.upsert({
       where: { code: role.code },
-      update: {},
+      update: { portal: role.portal, isSystem: true },
       create: role
     });
     if (role.code === 'admin') adminRole = r;
