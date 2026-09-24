@@ -85,12 +85,20 @@ const studentBase = {
   medicalNotes: z.string().optional(),
   status: z.enum(['active', 'inactive', 'graduated', 'transferred']).optional(),
   notes: z.string().optional(),
+  // Current-year class (null = remove from class) and parent links, saved with the student.
+  classId: z.coerce.number().int().positive().nullable().optional(),
+  parents: z.array(z.object({
+    parentUserId: z.coerce.number().int().positive(),
+    relationship: z.enum(['father', 'mother', 'guardian', 'grandparent', 'sibling', 'uncle_aunt', 'other']).optional(),
+    isPrimaryContact: z.boolean().optional(),
+  })).optional(),
 };
 export const studentCreateSchema = z.object({
   studentCode: z.string().min(1).max(20),
   ...studentBase,
 });
-export const studentUpdateSchema = z.object(studentBase).partial();
+// studentCode is editable too (it was silently dropped before).
+export const studentUpdateSchema = z.object({ studentCode: z.string().min(1).max(20), ...studentBase }).partial();
 
 // ─── Users (admin-managed accounts) ────────────────────
 // Login is by phone number or email, so an account needs at least one of them.

@@ -24,6 +24,16 @@ class StudentController {
     }
   }
 
+  async get(req, res, next) {
+    try {
+      const student = await studentRepository.findById(req.params.id);
+      if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+      res.json({ success: true, data: { student } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async create(req, res, next) {
     try {
       const student = await createStudentUseCase.execute(req.body);

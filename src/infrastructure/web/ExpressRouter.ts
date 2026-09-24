@@ -88,6 +88,7 @@ router.get('/dashboard/stats', AuthMiddleware.verifyToken, AuthMiddleware.requir
 
 // ─── Students (Admin/Teacher) ───────────────────────────
 router.get('/students', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), studentController.list);
+router.get('/students/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), studentController.get);
 router.post('/students', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), validate(studentCreateSchema), studentController.create);
 router.put('/students/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), validate(studentUpdateSchema), studentController.update);
 
