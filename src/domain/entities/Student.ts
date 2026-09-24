@@ -8,11 +8,9 @@ class Student {
   photoUrl: string;
   nationalityEn: string;
   nationalityLo: string;
-  addressEn: string;
-  addressLo: string;
+  address: string;
   status: string;
-  notesEn: string;
-  notesLo: string;
+  notes: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -27,11 +25,9 @@ class Student {
     photoUrl,
     nationalityEn = 'Lao',
     nationalityLo = 'ລາວ',
-    addressEn,
-    addressLo,
+    address,
     status = 'active',
-    notesEn,
-    notesLo,
+    notes,
     createdAt,
     updatedAt,
   }) {
@@ -44,11 +40,9 @@ class Student {
     this.photoUrl = photoUrl;
     this.nationalityEn = nationalityEn;
     this.nationalityLo = nationalityLo;
-    this.addressEn = addressEn;
-    this.addressLo = addressLo;
+    this.address = address;
     this.status = status;
-    this.notesEn = notesEn;
-    this.notesLo = notesLo;
+    this.notes = notes;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
   }

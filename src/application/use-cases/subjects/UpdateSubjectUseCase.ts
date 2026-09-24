@@ -7,7 +7,7 @@ class UpdateSubjectUseCase { userAdminRepository?: any;
   async execute(subjectId, data) {
     const {
       subjectNameEn, subjectNameLo, subjectCode,
-      descriptionEn, descriptionLo, teacherId, classId,
+      descriptionEn, descriptionLo,
       credits, isActive,
     } = data;
 
@@ -17,8 +17,6 @@ class UpdateSubjectUseCase { userAdminRepository?: any;
     if (subjectCode !== undefined) updateData.subjectCode = subjectCode || null;
     if (descriptionEn !== undefined) updateData.descriptionEn = descriptionEn;
     if (descriptionLo !== undefined) updateData.descriptionLo = descriptionLo;
-    if (teacherId !== undefined) updateData.teacherId = teacherId ? parseInt(teacherId) : null;
-    if (classId !== undefined) updateData.classId = classId ? parseInt(classId) : null;
     if (credits !== undefined) updateData.credits = parseFloat(credits);
     if (isActive !== undefined) updateData.isActive = isActive;
 

@@ -24,7 +24,10 @@ class WalletRepository {
         orderBy: { updatedAt: 'desc' },
         include: {
           student: {
-            select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true },
+            select: {
+              studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true,
+              spendingLimit: { select: { dailyMax: true } },
+            },
           },
         },
       }),

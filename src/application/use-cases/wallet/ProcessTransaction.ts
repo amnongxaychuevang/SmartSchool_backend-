@@ -1,3 +1,5 @@
+import { startOfSchoolDay, startOfSchoolWeek } from '../../../domain/schoolTime';
+
 class ProcessTransaction { walletRepository: any; shopRepository: any; spendingLimitRepository: any; notificationService: any;
   constructor(walletRepository, shopRepository, spendingLimitRepository, notificationService) {
     this.walletRepository = walletRepository;
@@ -98,19 +100,14 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
     }
 
     if (limits.dailyMax != null) {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const spentToday = await this.walletRepository.getSpentSince(walletId, startOfDay);
+      const spentToday = await this.walletRepository.getSpentSince(walletId, startOfSchoolDay());
       if (spentToday + amount > Number(limits.dailyMax)) {
         throw new Error('This purchase would exceed the daily spending limit');
       }
     }
 
     if (limits.weeklyMax != null) {
-      const startOfWeek = new Date();
-      startOfWeek.setHours(0, 0, 0, 0);
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-      const spentThisWeek = await this.walletRepository.getSpentSince(walletId, startOfWeek);
+      const spentThisWeek = await this.walletRepository.getSpentSince(walletId, startOfSchoolWeek());
       if (spentThisWeek + amount > Number(limits.weeklyMax)) {
         throw new Error('This purchase would exceed the weekly spending limit');
       }

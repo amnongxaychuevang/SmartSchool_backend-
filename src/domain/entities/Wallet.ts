@@ -2,7 +2,6 @@ class Wallet {
   walletId: number;
   studentId: number;
   balance: number;
-  dailyLimit: number | null;
   status: string;
   currencyCode: string;
   createdAt: Date;
@@ -13,7 +12,6 @@ class Wallet {
     walletId,
     studentId,
     balance = 0.00,
-    dailyLimit,
     status = 'active',
     currencyCode = 'LAK',
     createdAt,
@@ -22,7 +20,6 @@ class Wallet {
     this.walletId = walletId;
     this.studentId = studentId;
     this.balance = Number(balance);
-    this.dailyLimit = dailyLimit != null ? Number(dailyLimit) : null;
     this.status = status;
     this.currencyCode = currencyCode;
     this.createdAt = createdAt;

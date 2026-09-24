@@ -4,8 +4,17 @@ class SubjectRepository {
   async findMany({ search = '', classId, teacherId, page = 1, limit = 20 }: any = {}) {
     const skip = (page - 1) * limit;
     const where = {
-      ...(classId ? { classId: parseInt(classId) } : {}),
-      ...(teacherId ? { teacherId: parseInt(teacherId) } : {}),
+      // "Subjects taught to this class / by this teacher" go through ClassSubject.
+      ...(classId || teacherId
+        ? {
+            classSubjects: {
+              some: {
+                ...(classId ? { classId: parseInt(classId) } : {}),
+                ...(teacherId ? { teacherId: parseInt(teacherId) } : {}),
+              },
+            },
+          }
+        : {}),
       ...(search
         ? {
             OR: [
@@ -23,14 +32,6 @@ class SubjectRepository {
         skip,
         take: limit,
         orderBy: { subjectNameEn: 'asc' },
-        include: {
-          teacher: {
-            select: { userId: true, fullNameEn: true, fullNameLo: true },
-          },
-          class: {
-            select: { classId: true, classNameEn: true, classNameLo: true },
-          },
-        },
       }),
       prisma.subject.count({ where }),
     ]);
@@ -41,20 +42,12 @@ class SubjectRepository {
   async findById(subjectId) {
     return prisma.subject.findUnique({
       where: { subjectId: parseInt(subjectId) },
-      include: {
-        teacher: { select: { userId: true, fullNameEn: true, fullNameLo: true } },
-        class: { select: { classId: true, classNameEn: true, classNameLo: true } },
-      },
     });
   }
 
   async create(data) {
     return prisma.subject.create({
       data,
-      include: {
-        teacher: { select: { userId: true, fullNameEn: true, fullNameLo: true } },
-        class: { select: { classId: true, classNameEn: true, classNameLo: true } },
-      },
     });
   }
 
@@ -62,10 +55,6 @@ class SubjectRepository {
     return prisma.subject.update({
       where: { subjectId: parseInt(subjectId) },
       data,
-      include: {
-        teacher: { select: { userId: true, fullNameEn: true, fullNameLo: true } },
-        class: { select: { classId: true, classNameEn: true, classNameLo: true } },
-      },
     });
   }
 

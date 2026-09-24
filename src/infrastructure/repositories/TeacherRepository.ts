@@ -131,13 +131,6 @@ class TeacherRepository {
     });
   }
 
-  async delete(teacherId) {
-    // Deleting teacher also deletes user (cascade set on teacher.userId → user)
-    const teacher = await prisma.teacher.findUnique({ where: { teacherId: parseInt(teacherId) } });
-    if (!teacher) throw new Error('Teacher not found');
-    // Delete user → cascades to teacher
-    return prisma.user.delete({ where: { userId: teacher.userId } });
-  }
 }
 
 export default new TeacherRepository();

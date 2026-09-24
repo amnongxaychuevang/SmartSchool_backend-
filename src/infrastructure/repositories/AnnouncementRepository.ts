@@ -5,7 +5,10 @@ class AnnouncementRepository {
   async findAll() {
     return prisma.announcement.findMany({
       orderBy: { publishDate: 'desc' },
-      include: { author: { select: { fullNameEn: true, fullNameLo: true } } }
+      include: {
+        author: { select: { fullNameEn: true, fullNameLo: true } },
+        class: { select: { classNameEn: true, classNameLo: true } },
+      }
     });
   }
 

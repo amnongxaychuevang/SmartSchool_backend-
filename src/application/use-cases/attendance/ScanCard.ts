@@ -2,11 +2,13 @@ class ScanCard {
   cardRepository: any;
   attendanceRepository: any;
   notificationService: any;
+  dailyAttendanceRepository: any;
 
-  constructor(cardRepository, attendanceRepository, notificationService) {
+  constructor(cardRepository, attendanceRepository, notificationService, dailyAttendanceRepository) {
     this.cardRepository = cardRepository;
     this.attendanceRepository = attendanceRepository;
     this.notificationService = notificationService;
+    this.dailyAttendanceRepository = dailyAttendanceRepository;
   }
 
   /**
@@ -47,7 +49,12 @@ class ScanCard {
       gateLocationLo: gateLocation, // could be mapped based on location ID
     });
 
-    // 4. Notify Parent (Asynchronous)
+    // 4. The first check-in of the day marks the student present (or late).
+    if (logType === 'check_in') {
+      await this.dailyAttendanceRepository.recordCheckIn(card.studentId, attendanceLog.logTime);
+    }
+
+    // 5. Notify Parent (Asynchronous)
     // We don't await this so the response is fast
     this.notificationService.notifyParentAttendance(card.studentId, logType, new Date())
       .catch(err => console.error('Failed to notify parent:', err));

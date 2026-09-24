@@ -15,7 +15,7 @@ class SpendingLimitController {
   async upsert(req, res, next) {
     try {
       const { studentId } = req.params;
-      const { dailyMax, weeklyMax, perTransactionMax, alertThreshold, blockedShops, notesEn, notesLo } = req.body;
+      const { dailyMax, weeklyMax, perTransactionMax, alertThreshold, blockedShops, notes } = req.body;
 
       const data: any = {};
       if (dailyMax !== undefined) data.dailyMax = dailyMax ? parseFloat(dailyMax) : null;
@@ -23,8 +23,7 @@ class SpendingLimitController {
       if (perTransactionMax !== undefined) data.perTransactionMax = perTransactionMax ? parseFloat(perTransactionMax) : null;
       if (alertThreshold !== undefined) data.alertThreshold = alertThreshold ? parseFloat(alertThreshold) : null;
       if (blockedShops !== undefined) data.blockedShops = blockedShops;
-      if (notesEn !== undefined) data.notesEn = notesEn;
-      if (notesLo !== undefined) data.notesLo = notesLo;
+      if (notes !== undefined) data.notes = notes;
 
       const spendingLimit = await spendingLimitRepository.upsert(studentId, data, req.user.userId);
 

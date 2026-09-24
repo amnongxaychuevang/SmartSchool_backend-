@@ -10,9 +10,9 @@ const deleteGradeUseCase = new DeleteGradeUseCase(gradeRepository);
 class GradeController {
   async list(req, res, next) {
     try {
-      const { studentId, subjectId, classId, gradeMonth, page = 1, limit = 30 } = req.query;
+      const { studentId, subjectId, classId, termId, gradeMonth, page = 1, limit = 30 } = req.query;
       const result = await gradeRepository.findMany({
-        studentId, subjectId, classId, gradeMonth,
+        studentId, subjectId, classId, termId, gradeMonth,
         page: parseInt(page),
         limit: parseInt(limit),
       });
@@ -33,7 +33,7 @@ class GradeController {
 
   async create(req, res, next) {
     try {
-      const grade = await createGradeUseCase.execute(req.body, req.user?.userId);
+      const grade = await createGradeUseCase.execute(req.body, req.user);
       res.status(201).json({ success: true, data: { grade } });
     } catch (error) {
       next(error);
@@ -43,6 +43,14 @@ class GradeController {
   async update(req, res, next) {
     try {
       const { id } = req.params;
+      // A teacher may only change grades they recorded.
+      if (req.user?.role === 'teacher') {
+        const existing = await gradeRepository.findById(id);
+        if (!existing) throw Object.assign(new Error('Grade not found'), { statusCode: 404 });
+        if (existing.teacherId !== req.user.userId) {
+          throw Object.assign(new Error('You can only edit grades you recorded'), { statusCode: 403 });
+        }
+      }
       const grade = await updateGradeUseCase.execute(id, req.body);
       res.json({ success: true, data: { grade } });
     } catch (error) {

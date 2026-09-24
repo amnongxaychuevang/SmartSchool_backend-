@@ -5,15 +5,14 @@ class CreateCardUseCase { userAdminRepository?: any;
   }
 
   async execute(data, userId) {
-    const { cardUid, studentId, expiredDate, notesEn, notesLo } = data;
+    const { cardUid, studentId, expiredDate, notes } = data;
 
     return this.cardRepository.create({
       cardUid,
       studentId: parseInt(studentId),
       issuedBy: userId,
       ...(expiredDate ? { expiredDate: new Date(expiredDate) } : {}),
-      ...(notesEn ? { notesEn } : {}),
-      ...(notesLo ? { notesLo } : {}),
+      ...(notes ? { notes } : {}),
     });
   }
 }

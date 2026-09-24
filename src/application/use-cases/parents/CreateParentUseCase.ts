@@ -11,8 +11,8 @@ class CreateParentUseCase { userAdminRepository?: any;
       // User fields
       fullNameEn, fullNameLo, email, phoneNumber, password, isActive,
       // Parent fields
-      occupationEn, occupationLo, addressEn, addressLo,
-      emergencyContact, lineId, nationalId, notesEn, notesLo,
+      occupation, address,
+      emergencyContact, lineId, nationalId, notes,
     } = data;
 
     const passwordHash = await bcrypt.hash(password || 'password123', 10);
@@ -26,15 +26,12 @@ class CreateParentUseCase { userAdminRepository?: any;
     };
 
     const parentData = {
-      ...(occupationEn !== undefined ? { occupationEn } : {}),
-      ...(occupationLo !== undefined ? { occupationLo } : {}),
-      ...(addressEn !== undefined ? { addressEn } : {}),
-      ...(addressLo !== undefined ? { addressLo } : {}),
+      ...(occupation !== undefined ? { occupation } : {}),
+      ...(address !== undefined ? { address } : {}),
       ...(emergencyContact !== undefined ? { emergencyContact } : {}),
       ...(lineId !== undefined ? { lineId } : {}),
       ...(nationalId !== undefined ? { nationalId } : {}),
-      ...(notesEn !== undefined ? { notesEn } : {}),
-      ...(notesLo !== undefined ? { notesLo } : {}),
+      ...(notes !== undefined ? { notes } : {}),
     };
 
     return this.parentRepository.create(userData, parentData);

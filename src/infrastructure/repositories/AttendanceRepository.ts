@@ -1,4 +1,5 @@
 import prisma from '../database/PrismaClient';
+import { startOfSchoolDay } from '../../domain/schoolTime';
 
 class AttendanceRepository {
   /**
@@ -6,13 +7,10 @@ class AttendanceRepository {
    * Used to decide whether a new scan should be recorded as check-in or check-out.
    */
   async getLastLogToday(studentId) {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
     return prisma.attendanceLog.findFirst({
       where: {
         studentId: parseInt(studentId),
-        logTime: { gte: startOfDay },
+        logTime: { gte: startOfSchoolDay() },
       },
       orderBy: { logTime: 'desc' },
     });

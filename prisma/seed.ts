@@ -3,22 +3,6 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Always seed gender options (safe with upsert)
-  const genders = [
-    { code: 'male', nameEn: 'Male', nameLo: 'ຊາຍ' },
-    { code: 'female', nameEn: 'Female', nameLo: 'ຍິງ' },
-    { code: 'other', nameEn: 'Other', nameLo: 'ອື່ນໆ' }
-  ];
-
-  for (const gender of genders) {
-    await prisma.gender.upsert({
-      where: { code: gender.code },
-      update: {},
-      create: gender
-    });
-  }
-  console.log('Gender options seeded ✓');
-
   // Always seed roles (safe with upsert)
   const roles = [
     { code: 'admin', nameEn: 'Admin', nameLo: 'ແອັດມິນ' },

@@ -11,7 +11,6 @@ import studentController from '../../interfaces/controllers/StudentController';
 import userController from '../../interfaces/controllers/UserController';
 import classController from '../../interfaces/controllers/ClassController';
 import dashboardController from '../../interfaces/controllers/DashboardController';
-import genderController from '../../interfaces/controllers/GenderController';
 import teacherController from '../../interfaces/controllers/TeacherController';
 import parentController from '../../interfaces/controllers/ParentController';
 import subjectController from '../../interfaces/controllers/SubjectController';
@@ -26,6 +25,7 @@ import roleController from '../../interfaces/controllers/RoleController';
 import scheduleController from '../../interfaces/controllers/ScheduleController';
 import leaveRequestController from '../../interfaces/controllers/LeaveRequestController';
 import academicTermController from '../../interfaces/controllers/AcademicTermController';
+import classSubjectController from '../../interfaces/controllers/ClassSubjectController';
 import auditLogController from '../../interfaces/controllers/AuditLogController';
 
 // Middlewares
@@ -33,6 +33,7 @@ import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
 import validate from '../../interfaces/middlewares/validate';
 import {
   loginSchema, refreshTokenSchema, logoutSchema, attendanceScanSchema,
+  dailyAttendanceQuerySchema, dailyAttendanceSaveSchema,
   walletProcessSchema, walletTopUpSchema, walletStatusUpdateSchema,
   topUpCreateSchema, topUpRejectSchema,
   studentCreateSchema, studentUpdateSchema,
@@ -49,6 +50,7 @@ import {
   leaveRequestCreateSchema, leaveRequestStatusUpdateSchema,
   announcementCreateSchema, announcementUpdateSchema,
   academicTermCreateSchema, academicTermUpdateSchema,
+  classSubjectCreateSchema, classSubjectUpdateSchema,
   settingsSaveSchema,
 } from '../../interfaces/validators/schemas';
 
@@ -88,16 +90,12 @@ router.get('/dashboard/stats', AuthMiddleware.verifyToken, AuthMiddleware.requir
 router.get('/students', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), studentController.list);
 router.post('/students', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), validate(studentCreateSchema), studentController.create);
 router.put('/students/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), validate(studentUpdateSchema), studentController.update);
-router.delete('/students/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), studentController.delete);
 
-// ─── Genders (public master data) ───────────────────────
-router.get('/genders', AuthMiddleware.verifyToken, genderController.list);
 
 // ─── Users (Admin) ──────────────────────────────────────
 router.get('/users', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), userController.list);
 router.post('/users', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(userCreateSchema), userController.create);
 router.put('/users/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(userUpdateSchema), userController.update);
-router.delete('/users/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), userController.delete);
 
 // ─── Roles ──────────────────────────────────────────────
 router.get('/roles', AuthMiddleware.verifyToken, roleController.list);
@@ -106,13 +104,11 @@ router.get('/roles', AuthMiddleware.verifyToken, roleController.list);
 router.get('/teachers', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), teacherController.list);
 router.post('/teachers', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(teacherCreateSchema), teacherController.create);
 router.put('/teachers/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(teacherUpdateSchema), teacherController.update);
-router.delete('/teachers/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), teacherController.delete);
 
 // ─── Parents (Admin) ────────────────────────────────────
 router.get('/parents', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), parentController.list);
 router.post('/parents', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(parentCreateSchema), parentController.create);
 router.put('/parents/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(parentUpdateSchema), parentController.update);
-router.delete('/parents/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), parentController.delete);
 
 // ─── Parents (Parent Portal) ────────────────────────────
 router.get('/parents/me/announcements', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getAnnouncements);
@@ -142,6 +138,8 @@ router.put('/leave-requests/:id/status', AuthMiddleware.verifyToken, AuthMiddlew
 // ─── Attendance ─────────────────────────────────────────
 // Hit by unauthenticated gate hardware — protected by a shared device key instead of a user JWT.
 router.post('/attendance/scan', scanLimiter, AuthMiddleware.verifyDeviceKey, validate(attendanceScanSchema), attendanceController.scanCard);
+router.get('/attendance/daily', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher', 'admin']), validate(dailyAttendanceQuerySchema, 'query'), attendanceController.listDaily);
+router.put('/attendance/daily', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher', 'admin']), validate(dailyAttendanceSaveSchema), attendanceController.saveDaily);
 
 // ─── Wallet (shop purchase) ─────────────────────────────
 // No dedicated "cashier/shop-staff" role exists yet, so this is restricted to admin as an
@@ -160,6 +158,12 @@ router.get('/subjects', AuthMiddleware.verifyToken, AuthMiddleware.requireRole([
 router.post('/subjects', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(subjectCreateSchema), subjectController.create);
 router.put('/subjects/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(subjectUpdateSchema), subjectController.update);
 router.delete('/subjects/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), subjectController.delete);
+
+// ─── Class subjects (who teaches which subject to which class, per term) ───
+router.get('/class-subjects', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), classSubjectController.list);
+router.post('/class-subjects', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(classSubjectCreateSchema), classSubjectController.create);
+router.put('/class-subjects/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), validate(classSubjectUpdateSchema), classSubjectController.update);
+router.delete('/class-subjects/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin']), classSubjectController.delete);
 
 // ─── Grades (Admin/Teacher) ─────────────────────────────
 router.get('/grades', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['admin', 'teacher']), gradeController.list);

@@ -59,10 +59,21 @@ class TopUpRepository {
   }
 
   async approve(requestId, approvedBy) {
+    const id = parseInt(requestId);
+    const approverId = parseInt(approvedBy);
+
     return prisma.$transaction(async (tx) => {
-      const req = await tx.topUpRequest.findUnique({ where: { requestId: parseInt(requestId) } });
-      if (!req) throw new Error('Top-up request not found');
-      if (req.status !== 'pending') throw new Error('Request is not pending');
+      // Claim the request first. The conditional UPDATE row-locks it, so if two
+      // admins approve at once the second one waits, then matches 0 rows —
+      // the top-up can never be credited twice.
+      const claimed = await tx.topUpRequest.updateMany({
+        where: { requestId: id, status: 'pending' },
+        data: { status: 'approved', approvedBy: approverId, processedAt: new Date() },
+      });
+      if (claimed.count === 0) await this.throwNotPending(tx, id);
+
+      const req = await tx.topUpRequest.findUniqueOrThrow({ where: { requestId: id } });
+      const amount = Number(req.amount);
 
       // Find or create wallet for student
       let wallet = await tx.walletAccount.findUnique({ where: { studentId: req.studentId } });
@@ -70,38 +81,34 @@ class TopUpRepository {
         wallet = await tx.walletAccount.create({ data: { studentId: req.studentId, balance: 0 } });
       }
 
-      const balanceBefore = Number(wallet.balance);
-      const balanceAfter = balanceBefore + Number(req.amount);
-
-      // Update wallet
-      await tx.walletAccount.update({
+      // Atomic increment instead of read-modify-write, so a purchase that lands
+      // while this runs is not overwritten. balanceBefore is derived from the
+      // post-increment value, which is exact because the row is locked.
+      const updated = await tx.walletAccount.update({
         where: { walletId: wallet.walletId },
-        data: { balance: balanceAfter },
+        data: { balance: { increment: amount } },
       });
+      const balanceAfter = Number(updated.balance);
+      const balanceBefore = balanceAfter - amount;
 
-      // Create transaction record
-      await tx.walletTransaction.create({
+      const transaction = await tx.walletTransaction.create({
         data: {
           walletId: wallet.walletId,
           transactionType: 'top_up',
-          amount: Number(req.amount),
+          amount,
           balanceBefore,
           balanceAfter,
-          descriptionEn: `Top-up approved (request #${requestId})`,
-          descriptionLo: `ຍອມຮັບການເຕີມເງິນ (#${requestId})`,
-          processedBy: parseInt(approvedBy),
-          referenceNo: `TU-REQ-${requestId}-${Date.now()}`,
+          descriptionEn: `Top-up approved (request #${id})`,
+          descriptionLo: `ຍອມຮັບການເຕີມເງິນ (#${id})`,
+          processedBy: approverId,
+          referenceNo: `TU-REQ-${id}-${Date.now()}`,
         },
       });
 
-      // Mark request as approved
+      // Link the request to the transaction it produced, for auditing.
       return tx.topUpRequest.update({
-        where: { requestId: parseInt(requestId) },
-        data: {
-          status: 'approved',
-          approvedBy: parseInt(approvedBy),
-          processedAt: new Date(),
-        },
+        where: { requestId: id },
+        data: { transactionId: transaction.transactionId },
         include: {
           student: { select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true } },
         },
@@ -109,21 +116,29 @@ class TopUpRepository {
     });
   }
 
-  async reject(requestId, approvedBy, rejectReasonEn = '', rejectReasonLo = '') {
-    const req = await prisma.topUpRequest.findUnique({ where: { requestId: parseInt(requestId) } });
-    if (!req) throw new Error('Top-up request not found');
-    if (req.status !== 'pending') throw new Error('Request is not pending');
+  async reject(requestId, approvedBy, rejectReason = '') {
+    const id = parseInt(requestId);
 
-    return prisma.topUpRequest.update({
-      where: { requestId: parseInt(requestId) },
-      data: {
-        status: 'rejected',
-        approvedBy: parseInt(approvedBy),
-        rejectReasonEn,
-        rejectReasonLo,
-        processedAt: new Date(),
-      },
+    return prisma.$transaction(async (tx) => {
+      const claimed = await tx.topUpRequest.updateMany({
+        where: { requestId: id, status: 'pending' },
+        data: {
+          status: 'rejected',
+          approvedBy: parseInt(approvedBy),
+          rejectReason,
+          processedAt: new Date(),
+        },
+      });
+      if (claimed.count === 0) await this.throwNotPending(tx, id);
+
+      return tx.topUpRequest.findUniqueOrThrow({ where: { requestId: id } });
     });
+  }
+
+  private async throwNotPending(tx, requestId: number): Promise<never> {
+    const exists = await tx.topUpRequest.findUnique({ where: { requestId }, select: { requestId: true } });
+    if (!exists) throw Object.assign(new Error('Top-up request not found'), { statusCode: 404 });
+    throw Object.assign(new Error('Request is not pending'), { statusCode: 409 });
   }
 }
 

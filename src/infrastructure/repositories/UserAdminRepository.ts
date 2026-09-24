@@ -98,11 +98,6 @@ class UserAdminRepository {
     });
   }
 
-  async delete(userId) {
-    return prisma.user.delete({
-      where: { userId: parseInt(userId) }
-    });
-  }
 }
 
 export default new UserAdminRepository();

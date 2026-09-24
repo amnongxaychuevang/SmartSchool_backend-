@@ -9,8 +9,8 @@ class UpdateParentUseCase { userAdminRepository?: any;
   async execute(parentId, data) {
     const {
       fullNameEn, fullNameLo, email, phoneNumber, password, isActive,
-      occupationEn, occupationLo, addressEn, addressLo,
-      emergencyContact, lineId, nationalId, notesEn, notesLo,
+      occupation, address,
+      emergencyContact, lineId, nationalId, notes,
     } = data;
 
     const userData: any = {};
@@ -22,15 +22,12 @@ class UpdateParentUseCase { userAdminRepository?: any;
     if (password) userData.passwordHash = await bcrypt.hash(password, 10);
 
     const parentData: any = {};
-    if (occupationEn !== undefined) parentData.occupationEn = occupationEn;
-    if (occupationLo !== undefined) parentData.occupationLo = occupationLo;
-    if (addressEn !== undefined) parentData.addressEn = addressEn;
-    if (addressLo !== undefined) parentData.addressLo = addressLo;
+    if (occupation !== undefined) parentData.occupation = occupation;
+    if (address !== undefined) parentData.address = address;
     if (emergencyContact !== undefined) parentData.emergencyContact = emergencyContact;
     if (lineId !== undefined) parentData.lineId = lineId;
     if (nationalId !== undefined) parentData.nationalId = nationalId;
-    if (notesEn !== undefined) parentData.notesEn = notesEn;
-    if (notesLo !== undefined) parentData.notesLo = notesLo;
+    if (notes !== undefined) parentData.notes = notes;
 
     return this.parentRepository.update(parentId, userData, parentData);
   }

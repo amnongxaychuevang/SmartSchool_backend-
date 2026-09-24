@@ -24,7 +24,7 @@ class AnnouncementController {
 
   async create(req, res, next) {
     try {
-      const { titleEn, titleLo, contentEn, contentLo, targetAudience, expiryDate } = req.body;
+      const { titleEn, titleLo, contentEn, contentLo, targetAudience, classId, expiryDate } = req.body;
       const createdBy = req.user.userId; // Provided by AuthMiddleware
 
       const newAnnouncement = await announcementRepository.create({
@@ -33,6 +33,7 @@ class AnnouncementController {
         contentEn,
         contentLo,
         targetAudience: targetAudience || 'all',
+        classId: targetAudience === 'class' ? Number(classId) : null,
         expiryDate: expiryDate ? new Date(expiryDate) : null,
         createdBy
       });
@@ -45,13 +46,19 @@ class AnnouncementController {
 
   async update(req, res, next) {
     try {
-      const { titleEn, titleLo, contentEn, contentLo, targetAudience, expiryDate } = req.body;
+      const { titleEn, titleLo, contentEn, contentLo, targetAudience, classId, expiryDate } = req.body;
+      if (targetAudience === 'class' && classId === undefined) {
+        throw Object.assign(new Error('classId is required when targetAudience is "class"'), { statusCode: 400 });
+      }
       const data: any = {};
       if (titleEn !== undefined) data.titleEn = titleEn;
       if (titleLo !== undefined) data.titleLo = titleLo;
       if (contentEn !== undefined) data.contentEn = contentEn;
       if (contentLo !== undefined) data.contentLo = contentLo;
-      if (targetAudience !== undefined) data.targetAudience = targetAudience;
+      if (targetAudience !== undefined) {
+        data.targetAudience = targetAudience;
+        data.classId = targetAudience === 'class' ? Number(classId) : null;
+      }
       if (expiryDate !== undefined) data.expiryDate = expiryDate ? new Date(expiryDate) : null;
 
       const updated = await announcementRepository.update(req.params.id, data);

@@ -1,13 +1,17 @@
 import prisma from '../database/PrismaClient';
+import { currentEnrolmentWhere } from './AcademicYear';
 
 class StudentRepository {
   /**
    * Get paginated list of students with optional search
    */
-  async findMany({ search = '', page = 1, limit = 20, status }: any = {}) {
+  async findMany({ search = '', page = 1, limit = 20, status, classId }: any = {}) {
     const skip = (page - 1) * limit;
     const where = {
       ...(status ? { status } : {}),
+      ...(classId
+        ? { classStudents: { some: { classId: parseInt(classId), ...(await currentEnrolmentWhere()) } } }
+        : {}),
       ...(search
         ? {
             OR: [
@@ -19,6 +23,7 @@ class StudentRepository {
         : {}),
     };
 
+    const enrolment = await currentEnrolmentWhere();
     const [students, total] = await Promise.all([
       prisma.student.findMany({
         where,
@@ -26,7 +31,9 @@ class StudentRepository {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
+          // Only this year's class; [0] used to be whichever enrolment came first (possibly last year's).
           classStudents: {
+            where: enrolment,
             include: { class: { select: { classNameEn: true, classNameLo: true } } },
             take: 1,
           },
@@ -54,6 +61,7 @@ class StudentRepository {
       data,
       include: {
         classStudents: {
+          where: await currentEnrolmentWhere(),
           include: { class: { select: { classNameEn: true, classNameLo: true } } },
           take: 1
         }
@@ -67,16 +75,11 @@ class StudentRepository {
       data,
       include: {
         classStudents: {
+          where: await currentEnrolmentWhere(),
           include: { class: { select: { classNameEn: true, classNameLo: true } } },
           take: 1
         }
       }
-    });
-  }
-
-  async delete(studentId) {
-    return prisma.student.delete({
-      where: { studentId: parseInt(studentId) }
     });
   }
 }

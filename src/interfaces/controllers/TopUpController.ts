@@ -64,15 +64,15 @@ class TopUpController {
   async reject(req, res, next) {
     try {
       const { id } = req.params;
-      const { rejectReasonEn, rejectReasonLo } = req.body;
-      const result = await topUpRepository.reject(id, req.user.userId, rejectReasonEn, rejectReasonLo);
+      const { rejectReason } = req.body;
+      const result = await topUpRepository.reject(id, req.user.userId, rejectReason);
 
       auditLogRepository.log({
         userId: req.user.userId,
         action: 'reject',
         entityType: 'top_up_request',
         entityId: id,
-        detail: { rejectReasonEn, rejectReasonLo },
+        detail: { rejectReason },
         ipAddress: req.ip,
       });
 

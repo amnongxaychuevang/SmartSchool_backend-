@@ -1,23 +1,22 @@
 import GetStudentsUseCase from '../../application/use-cases/students/GetStudentsUseCase';
 import CreateStudentUseCase from '../../application/use-cases/students/CreateStudentUseCase';
 import UpdateStudentUseCase from '../../application/use-cases/students/UpdateStudentUseCase';
-import DeleteStudentUseCase from '../../application/use-cases/students/DeleteStudentUseCase';
 import studentRepository from '../../infrastructure/repositories/StudentRepository';
 
 const getStudentsUseCase = new GetStudentsUseCase(studentRepository);
 const createStudentUseCase = new CreateStudentUseCase(studentRepository);
 const updateStudentUseCase = new UpdateStudentUseCase(studentRepository);
-const deleteStudentUseCase = new DeleteStudentUseCase(studentRepository);
 
 class StudentController {
   async list(req, res, next) {
     try {
-      const { search = '', page = 1, limit = 20, status } = req.query;
+      const { search = '', page = 1, limit = 20, status, classId } = req.query;
       const result = await getStudentsUseCase.execute({
         search,
         page: parseInt(page),
         limit: parseInt(limit),
         status,
+        classId,
       });
       res.json({ success: true, data: result });
     } catch (error) {
@@ -39,16 +38,6 @@ class StudentController {
       const { id } = req.params;
       const student = await updateStudentUseCase.execute(id, req.body);
       res.json({ success: true, data: { student } });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async delete(req, res, next) {
-    try {
-      const { id } = req.params;
-      await deleteStudentUseCase.execute(id);
-      res.json({ success: true });
     } catch (error) {
       next(error);
     }

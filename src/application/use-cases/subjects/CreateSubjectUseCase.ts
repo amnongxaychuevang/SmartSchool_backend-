@@ -7,7 +7,7 @@ class CreateSubjectUseCase { userAdminRepository?: any;
   async execute(data) {
     const {
       subjectNameEn, subjectNameLo, subjectCode,
-      descriptionEn, descriptionLo, teacherId, classId,
+      descriptionEn, descriptionLo,
       credits, isActive,
     } = data;
 
@@ -17,8 +17,6 @@ class CreateSubjectUseCase { userAdminRepository?: any;
       ...(subjectCode ? { subjectCode } : {}),
       ...(descriptionEn ? { descriptionEn } : {}),
       ...(descriptionLo ? { descriptionLo } : {}),
-      ...(teacherId ? { teacherId: parseInt(teacherId) } : {}),
-      ...(classId ? { classId: parseInt(classId) } : {}),
       ...(credits !== undefined ? { credits: parseFloat(credits) } : {}),
       ...(isActive !== undefined ? { isActive } : {}),
     });

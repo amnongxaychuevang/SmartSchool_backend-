@@ -1,4 +1,6 @@
 import prisma from '../database/PrismaClient';
+import { currentEnrolmentWhere } from './AcademicYear';
+import { scheduleInclude, flattenSchedule } from './ScheduleRepository';
 
 class ParentRepository {
   /**
@@ -126,15 +128,19 @@ class ParentRepository {
       throw Object.assign(new Error('Unauthorized or not your child'), { statusCode: 403 });
     }
 
-    return prisma.grade.findMany({
+    const grades = await prisma.grade.findMany({
       where: { studentId: parseInt(studentId) },
       include: {
-        subject: {
-          include: { class: true }
-        }
+        classSubject: { include: { subject: true, class: true, term: true } },
       },
       orderBy: { recordedAt: 'desc' }
     });
+    return grades.map(({ classSubject, ...g }) => ({
+      ...g,
+      // `subject.class` kept for the existing parent grades screen.
+      subject: { ...classSubject.subject, class: classSubject.class },
+      term: classSubject.term,
+    }));
   }
 
   async findChildWallet(studentId, parentUserId) {
@@ -155,14 +161,28 @@ class ParentRepository {
       }
     });
   }
-  async getAnnouncements() {
+  async getAnnouncements(parentUserId) {
+    // Classes the parent's children are in this year, for class-targeted announcements.
+    const enrolments = await prisma.classStudent.findMany({
+      where: {
+        ...(await currentEnrolmentWhere()),
+        student: { parentStudents: { some: { parentUserId: parseInt(parentUserId) } } },
+      },
+      select: { classId: true },
+    });
+    const classIds = enrolments.map((e) => e.classId);
+
     return prisma.announcement.findMany({
       where: {
-        targetAudience: { in: ['all', 'parents'] },
-        OR: [
-          { expiryDate: null },
-          { expiryDate: { gte: new Date() } }
-        ]
+        AND: [
+          {
+            OR: [
+              { targetAudience: { in: ['all', 'parents'] } },
+              { targetAudience: 'class', classId: { in: classIds } },
+            ],
+          },
+          { OR: [{ expiryDate: null }, { expiryDate: { gte: new Date() } }] },
+        ],
       },
       orderBy: { publishDate: 'desc' }
     });
@@ -175,22 +195,20 @@ class ParentRepository {
     if (!link) throw Object.assign(new Error('Unauthorized'), { statusCode: 403 });
 
     const studentClasses = await prisma.classStudent.findMany({
-      where: { studentId: parseInt(studentId) },
+      where: { studentId: parseInt(studentId), ...(await currentEnrolmentWhere()) },
       select: { classId: true }
     });
     const classIds = studentClasses.map(sc => sc.classId);
 
-    return prisma.schedule.findMany({
-      where: { classId: { in: classIds } },
-      include: {
-        subject: true,
-        teacher: { select: { fullNameEn: true, fullNameLo: true } }
-      },
+    const rows = await prisma.schedule.findMany({
+      where: { classSubject: { classId: { in: classIds } } },
+      include: scheduleInclude,
       orderBy: [
         { dayOfWeek: 'asc' },
         { startTime: 'asc' }
       ]
     });
+    return rows.map(flattenSchedule);
   }
 
   async getLeaveRequests(studentId, parentUserId) {
@@ -217,8 +235,7 @@ class ParentRepository {
         parentUserId: parseInt(parentUserId),
         startDate: new Date(data.startDate),
         endDate: new Date(data.endDate),
-        reasonEn: data.reasonEn,
-        reasonLo: data.reasonLo,
+        reason: data.reason,
         documentUrl: data.documentUrl,
         status: 'pending'
       }
@@ -260,11 +277,6 @@ class ParentRepository {
         setBy: parseInt(parentUserId)
       }
     });
-  }
-  async delete(parentId) {
-    const parent = await prisma.parent.findUnique({ where: { parentId: parseInt(parentId) } });
-    if (!parent) throw new Error('Parent not found');
-    return prisma.user.delete({ where: { userId: parent.userId } });
   }
 }
 

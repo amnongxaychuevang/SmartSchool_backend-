@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import prisma from '../../infrastructure/database/PrismaClient';
 
 const AuthMiddleware = {
   verifyToken: (req, res, next) => {
@@ -9,13 +10,25 @@ const AuthMiddleware = {
 
     const token = authHeader.split(' ')[1];
     
+    let decoded;
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-      req.user = decoded; // Contains { userId, role, ... }
-      next();
+      decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch (err) {
       return res.status(401).json({ success: false, message: 'Invalid or expired token' });
     }
+
+    // Accounts are deactivated rather than deleted, and an access token stays
+    // valid until it expires — so check the account is still active on every request.
+    prisma.user
+      .findUnique({ where: { userId: Number(decoded.userId) }, select: { isActive: true } })
+      .then((user) => {
+        if (!user || user.isActive === false) {
+          return res.status(401).json({ success: false, message: 'Account is deactivated' });
+        }
+        req.user = decoded; // Contains { userId, role, ... }
+        next();
+      })
+      .catch(next);
   },
 
   requireRole: (roles) => {

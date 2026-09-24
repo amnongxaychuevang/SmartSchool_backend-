@@ -1,11 +1,9 @@
 import CreateParentUseCase from '../../application/use-cases/parents/CreateParentUseCase';
 import UpdateParentUseCase from '../../application/use-cases/parents/UpdateParentUseCase';
-import DeleteParentUseCase from '../../application/use-cases/parents/DeleteParentUseCase';
 import parentRepository from '../../infrastructure/repositories/ParentRepository';
 
 const createParentUseCase = new CreateParentUseCase(parentRepository);
 const updateParentUseCase = new UpdateParentUseCase(parentRepository);
-const deleteParentUseCase = new DeleteParentUseCase(parentRepository);
 
 class ParentController {
   async list(req, res, next) {
@@ -36,16 +34,6 @@ class ParentController {
       const { id } = req.params;
       const parent = await updateParentUseCase.execute(id, req.body);
       res.json({ success: true, data: { parent } });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async delete(req, res, next) {
-    try {
-      const { id } = req.params;
-      await deleteParentUseCase.execute(id);
-      res.json({ success: true });
     } catch (error) {
       next(error);
     }
@@ -98,7 +86,7 @@ class ParentController {
 
   async getAnnouncements(req, res, next) {
     try {
-      const announcements = await parentRepository.getAnnouncements();
+      const announcements = await parentRepository.getAnnouncements(req.user.userId);
       res.json({ success: true, data: announcements });
     } catch (error) {
       next(error);

@@ -1,11 +1,9 @@
 import CreateTeacherUseCase from '../../application/use-cases/teachers/CreateTeacherUseCase';
 import UpdateTeacherUseCase from '../../application/use-cases/teachers/UpdateTeacherUseCase';
-import DeleteTeacherUseCase from '../../application/use-cases/teachers/DeleteTeacherUseCase';
 import teacherRepository from '../../infrastructure/repositories/TeacherRepository';
 
 const createTeacherUseCase = new CreateTeacherUseCase(teacherRepository);
 const updateTeacherUseCase = new UpdateTeacherUseCase(teacherRepository);
-const deleteTeacherUseCase = new DeleteTeacherUseCase(teacherRepository);
 
 class TeacherController {
   async list(req, res, next) {
@@ -41,15 +39,6 @@ class TeacherController {
     }
   }
 
-  async delete(req, res, next) {
-    try {
-      const { id } = req.params;
-      await deleteTeacherUseCase.execute(id);
-      res.json({ success: true });
-    } catch (error) {
-      next(error);
-    }
-  }
 }
 
 export default new TeacherController();

@@ -12,8 +12,8 @@ class CreateTeacherUseCase {
       // User fields
       fullNameEn, fullNameLo, email, phoneNumber, password, isActive,
       // Teacher fields
-      employeeCode, specialization, qualificationEn, qualificationLo,
-      hireDate, salary, addressEn, addressLo, notesEn, notesLo,
+      employeeCode, specialization, qualification,
+      hireDate, salary, address, notes,
     } = data;
 
     const passwordHash = await bcrypt.hash(password || '123456', 10);
@@ -29,14 +29,11 @@ class CreateTeacherUseCase {
     const teacherData = {
       ...(employeeCode ? { employeeCode } : {}),
       ...(specialization !== undefined ? { specialization } : {}),
-      ...(qualificationEn !== undefined ? { qualificationEn } : {}),
-      ...(qualificationLo !== undefined ? { qualificationLo } : {}),
+      ...(qualification !== undefined ? { qualification } : {}),
       ...(hireDate ? { hireDate: new Date(hireDate) } : {}),
       ...(salary !== undefined ? { salary } : {}),
-      ...(addressEn !== undefined ? { addressEn } : {}),
-      ...(addressLo !== undefined ? { addressLo } : {}),
-      ...(notesEn !== undefined ? { notesEn } : {}),
-      ...(notesLo !== undefined ? { notesLo } : {}),
+      ...(address !== undefined ? { address } : {}),
+      ...(notes !== undefined ? { notes } : {}),
     };
 
     return this.teacherRepository.create(userData, teacherData);
