@@ -113,10 +113,13 @@ class ParentRepository {
       throw Object.assign(new Error('Unauthorized or not your child'), { statusCode: 403 });
     }
 
-    return prisma.attendanceLog.findMany({
+    // Daily status (present / late / absent / excused) rather than raw gate taps —
+    // that's what the parent screen shows.
+    return prisma.dailyAttendance.findMany({
       where: { studentId: parseInt(studentId) },
-      orderBy: { logTime: 'desc' },
-      take: 100 // Limit for frontend performance
+      orderBy: { date: 'desc' },
+      take: 100,
+      select: { id: true, date: true, status: true, firstCheckIn: true, note: true },
     });
   }
 
