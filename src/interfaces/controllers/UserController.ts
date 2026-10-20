@@ -1,12 +1,15 @@
 import GetUsersUseCase from '../../application/use-cases/users/GetUsersUseCase';
 import CreateUserUseCase from '../../application/use-cases/users/CreateUserUseCase';
 import UpdateUserUseCase from '../../application/use-cases/users/UpdateUserUseCase';
+import OpenTeacherAccountUseCase from '../../application/use-cases/users/OpenTeacherAccountUseCase';
 import userAdminRepository from '../../infrastructure/repositories/UserAdminRepository';
+import teacherRepository from '../../infrastructure/repositories/TeacherRepository';
 import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
 
 const getUsersUseCase = new GetUsersUseCase(userAdminRepository);
 const createUserUseCase = new CreateUserUseCase(userAdminRepository);
 const updateUserUseCase = new UpdateUserUseCase(userAdminRepository);
+const openTeacherAccountUseCase = new OpenTeacherAccountUseCase(userAdminRepository);
 
 class UserController {
   async list(req, res, next) {
@@ -28,6 +31,33 @@ class UserController {
     try {
       const user = await createUserUseCase.execute(req.body);
       res.json({ success: true, data: { user } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Teachers that have no login account yet. */
+  async teacherCandidates(req, res, next) {
+    try {
+      const teachers = await teacherRepository.findWithoutAccount();
+      res.json({ success: true, data: { teachers } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async openTeacherAccount(req, res, next) {
+    try {
+      const user = await openTeacherAccountUseCase.execute(req.body);
+      auditLogRepository.log({
+        userId: req.user?.userId,
+        action: 'create',
+        entityType: 'user',
+        entityId: user.userId,
+        detail: { teacherId: req.body.teacherId, roleId: req.body.roleId },
+        ipAddress: req.ip,
+      });
+      res.status(201).json({ success: true, data: { user } });
     } catch (error) {
       next(error);
     }

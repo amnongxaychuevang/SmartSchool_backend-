@@ -9,6 +9,7 @@ import { Server  } from 'socket.io';
 import expressRouter from './infrastructure/web/ExpressRouter';
 import SocketManager from './infrastructure/websocket/SocketManager';
 import ErrorHandler from './interfaces/middlewares/ErrorHandler';
+import { UPLOAD_ROOT, UPLOAD_URL_PREFIX } from './infrastructure/storage/PhotoStorage';
 
 const app = express();
 const server = http.createServer(app);
@@ -40,6 +41,14 @@ app.use('/api', rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 }));
+
+// Uploaded photos. Names are random UUIDs, so a URL can't be guessed; helmet's
+// default same-origin resource policy would stop the frontend (another port/domain)
+// from displaying them, so these files alone are allowed cross-origin.
+app.use(UPLOAD_URL_PREFIX, (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(UPLOAD_ROOT, { maxAge: '30d', immutable: true, index: false, dotfiles: 'deny' }));
 
 // Integrate API Routes
 app.use('/api', expressRouter);

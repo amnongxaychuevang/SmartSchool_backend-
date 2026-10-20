@@ -2,7 +2,6 @@ import ProcessTransaction from '../../application/use-cases/wallet/ProcessTransa
 import walletRepository from '../../infrastructure/repositories/WalletRepository';
 import shopRepository from '../../infrastructure/repositories/ShopRepository';
 import spendingLimitRepository from '../../infrastructure/repositories/SpendingLimitRepository';
-import notificationService from '../../infrastructure/notifications/TelegramNotificationService';
 import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
 
 import { Request, Response, NextFunction } from 'express';
@@ -11,7 +10,6 @@ const processTransactionUseCase = new ProcessTransaction(
   walletRepository,
   shopRepository,
   spendingLimitRepository,
-  notificationService
 );
 
 class WalletController {

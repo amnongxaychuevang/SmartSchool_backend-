@@ -1,14 +1,16 @@
 import prisma from '../database/PrismaClient';
 import { currentEnrolmentWhere, getCurrentAcademicYear } from './AcademicYear';
+import { ADDRESS_INCLUDE, checkAddress } from './Address';
 
 class StudentRepository {
   /**
    * Get paginated list of students with optional search
    */
-  async findMany({ search = '', page = 1, limit = 20, status, classId }: any = {}) {
+  async findMany({ search = '', page = 1, limit = 20, status, classId, gender }: any = {}) {
     const skip = (page - 1) * limit;
     const where = {
       ...(status ? { status } : {}),
+      ...(gender ? { gender } : {}),
       ...(classId
         ? { classStudents: { some: { classId: parseInt(classId), ...(await currentEnrolmentWhere()) } } }
         : {}),
@@ -41,6 +43,7 @@ class StudentRepository {
             include: { parent: { select: { userId: true, fullNameEn: true, fullNameLo: true, phoneNumber: true } } },
             take: 1, // Only need the primary or first parent for the table
           },
+          ...ADDRESS_INCLUDE,
         },
       }),
       prisma.student.count({ where }),
@@ -62,6 +65,7 @@ class StudentRepository {
         parentStudents: {
           include: { parent: { select: { userId: true, fullNameEn: true, fullNameLo: true, phoneNumber: true } } },
         },
+        ...ADDRESS_INCLUDE,
       },
     });
   }
@@ -72,18 +76,36 @@ class StudentRepository {
    * leaving one out keeps what is there.
    */
   async create({ classId, parents, ...student }: StudentWrite) {
-    const studentId = await prisma.$transaction(async (tx) => {
-      const created = await tx.student.create({ data: student });
-      if (classId) await setCurrentClass(tx, created.studentId, classId);
-      if (parents) await setParents(tx, created.studentId, parents);
-      return created.studentId;
-    });
+    // Two admins saving at the same instant can compute the same next code; the
+    // unique index rejects the second, so recompute and try again.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const studentId = await prisma.$transaction(async (tx) => {
+          await checkAddress(tx, student);
+          const studentCode = await nextStudentCode(tx);
+          const created = await tx.student.create({ data: { ...student, studentCode, status: 'active' } });
+          if (classId) await setCurrentClass(tx, created.studentId, classId);
+          if (parents) await setParents(tx, created.studentId, parents);
+          return created.studentId;
+        });
+        return this.findById(studentId);
+      } catch (err) {
+        // A brand-new row can only clash on student_code (its class/parent links are new too).
+        if (err?.code !== 'P2002' || attempt >= 5) throw err;
+      }
+    }
+  }
+
+  async setPhoto(studentId: number, photoUrl: string | null) {
+    await prisma.student.update({ where: { studentId }, data: { photoUrl } });
     return this.findById(studentId);
   }
 
   async update(studentId, { classId, parents, ...student }: StudentWrite) {
     const id = parseInt(studentId);
     await prisma.$transaction(async (tx) => {
+      await checkAddress(tx, student, async () =>
+        (await tx.student.findUnique({ where: { studentId: id }, select: { districtId: true } }))?.districtId);
       if (Object.keys(student).length > 0) await tx.student.update({ where: { studentId: id }, data: student });
       if (classId !== undefined) await setCurrentClass(tx, id, classId);
       if (parents) await setParents(tx, id, parents);
@@ -94,6 +116,20 @@ class StudentRepository {
 
 type ParentLink = { parentUserId: number; relationship?: string; isPrimaryContact?: boolean };
 type StudentWrite = Record<string, unknown> & { classId?: number | null; parents?: ParentLink[] };
+
+
+/** STU-<year>-<4-digit sequence>, restarting at 0001 each calendar year. */
+export async function nextStudentCode(tx, now = new Date()) {
+  const prefix = `STU-${now.getFullYear()}-`;
+  // Compare numerically: as text "STU-2026-9999" sorts after "STU-2026-10000", and
+  // older hand-typed codes may use 3 digits ("STU-2026-001").
+  const rows = await tx.student.findMany({
+    where: { studentCode: { startsWith: prefix } },
+    select: { studentCode: true },
+  });
+  const lastSeq = rows.reduce((max, r) => Math.max(max, parseInt(r.studentCode.slice(prefix.length), 10) || 0), 0);
+  return `${prefix}${String(lastSeq + 1).padStart(4, '0')}`;
+}
 
 const httpError = (message: string, statusCode: number) => Object.assign(new Error(message), { statusCode });
 

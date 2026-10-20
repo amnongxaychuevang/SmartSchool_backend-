@@ -1,6 +1,10 @@
 import { Server  } from 'socket.io';
+import DashboardEvents from './DashboardEvents';
 
-class SocketManager { io: any;
+class SocketManager {
+  io: any;
+  dashboardEvents: DashboardEvents;
+
   constructor(server) {
     this.io = new Server(server, {
       cors: {
@@ -9,6 +13,7 @@ class SocketManager { io: any;
       }
     });
 
+    this.dashboardEvents = new DashboardEvents(this.io);
     this.init();
   }
 
@@ -20,6 +25,9 @@ class SocketManager { io: any;
         console.log(`Socket disconnected: ${socket.id}`);
       });
     });
+
+    // Setup periodic dashboard updates
+    this.dashboardEvents.setupPeriodicUpdates();
   }
 
   /**

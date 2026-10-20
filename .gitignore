@@ -8,6 +8,10 @@ node_modules
 # Prisma
 prisma/generated
 
+# Uploaded files (photos, signed documents) — user data, not source code
+uploads
+storage
+
 # Logs
 logs
 *.log

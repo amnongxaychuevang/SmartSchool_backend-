@@ -43,6 +43,21 @@ describe('LoginUseCase', () => {
     passwordHash = await bcrypt.hash('correct-password', 10);
   });
 
+  it('finds the account however the phone number is typed', async () => {
+    repos.userRepository.findByPhoneNumber.mockResolvedValue(makeUser({ passwordHash, isActive: true }));
+
+    await useCase.execute('020 5555-5555', 'correct-password');
+
+    expect(repos.userRepository.findByPhoneNumber).toHaveBeenCalledWith('+856 20 5555 5555');
+  });
+
+  it('rejects a person who has no login account yet (no password set)', async () => {
+    repos.userRepository.findByPhoneNumber.mockResolvedValue(makeUser({ passwordHash: null, isActive: true }));
+
+    await expect(useCase.execute('02055555555', 'anything')).rejects.toThrow('Invalid credentials');
+    expect(repos.refreshTokenRepository.issue).not.toHaveBeenCalled();
+  });
+
   it('returns a short-lived access token, a refresh token, and the user on valid credentials', async () => {
     const user = makeUser({ passwordHash, isActive: true });
     repos.userRepository.findByEmail.mockResolvedValue(user);
@@ -83,7 +98,8 @@ describe('LoginUseCase', () => {
   it('routes phone-number identifiers to findByPhoneNumber, not findByEmail', async () => {
     repos.userRepository.findByPhoneNumber.mockResolvedValue(null);
     await expect(useCase.execute('02012345678', 'whatever')).rejects.toThrow();
-    expect(repos.userRepository.findByPhoneNumber).toHaveBeenCalledWith('02012345678');
+    // Looked up in the stored canonical form.
+    expect(repos.userRepository.findByPhoneNumber).toHaveBeenCalledWith('+856 20 1234 5678');
     expect(repos.userRepository.findByEmail).not.toHaveBeenCalled();
   });
 });

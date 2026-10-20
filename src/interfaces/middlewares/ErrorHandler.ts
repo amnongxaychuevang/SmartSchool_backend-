@@ -26,6 +26,10 @@ const ErrorHandler = (err, req, res, next) => {
     // internal column/table names) was passed straight through to the client.
     statusCode = 409; // Conflict
     message = 'This record cannot be removed because it is still referenced by other data';
+  } else if (statusCode >= 500 && process.env.NODE_ENV !== 'development') {
+    // Unexpected errors (e.g. a Prisma query error) carry file paths and query shapes;
+    // keep those in the server log, not in the response.
+    message = 'Internal Server Error';
   }
 
   res.status(statusCode).json({

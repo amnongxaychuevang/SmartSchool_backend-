@@ -350,12 +350,14 @@ async function main() {
 
   // ── Students, cards, class enrolment ──
   const students: { id: number; cardId: number; cardUid: string; classIdx: number; homeroom: number }[] = [];
+  // Ids from prisma/data/laoDivisions.ts (seeded by prisma/seed.ts): province 1 = ນະຄອນຫຼວງວຽງຈັນ,
+  // districts 1 = ຈັນທະບູລີ, 7 = ສີສັດຕະນາກ, 8 = ໄຊເສດຖາ.
   const provinces = [
-    { village: 'ບ້ານໂພນປ່າເປົ້າ', district: 'ເມືອງສີສັດຕະນາກ', province: 'ນະຄອນຫຼວງວຽງຈັນ' },
-    { village: 'ບ້ານຊຽງຢືນ', district: 'ເມືອງຈັນທະບູລີ', province: 'ນະຄອນຫຼວງວຽງຈັນ' },
-    { village: 'ບ້ານດົງປ່າລານ', district: 'ເມືອງສີສັດຕະນາກ', province: 'ນະຄອນຫຼວງວຽງຈັນ' },
-    { village: 'ບ້ານໂນນສະຫວ່າງ', district: 'ເມືອງໄຊເສດຖາ', province: 'ນະຄອນຫຼວງວຽງຈັນ' },
-    { village: 'ບ້ານໂພນຕ້ອງ', district: 'ເມືອງຈັນທະບູລີ', province: 'ນະຄອນຫຼວງວຽງຈັນ' },
+    { village: 'ບ້ານໂພນປ່າເປົ້າ', districtId: 7, provinceId: 1 },
+    { village: 'ບ້ານຊຽງຢືນ', districtId: 1, provinceId: 1 },
+    { village: 'ບ້ານດົງປ່າລານ', districtId: 7, provinceId: 1 },
+    { village: 'ບ້ານໂນນສະຫວ່າງ', districtId: 8, provinceId: 1 },
+    { village: 'ບ້ານໂພນຕ້ອງ', districtId: 1, provinceId: 1 },
   ];
   for (const [i, s] of STUDENTS.entries()) {
     const classIdx = Math.floor(i / 8);

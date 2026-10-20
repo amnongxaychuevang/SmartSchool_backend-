@@ -1,6 +1,7 @@
 import CreateParentUseCase from '../../application/use-cases/parents/CreateParentUseCase';
 import UpdateParentUseCase from '../../application/use-cases/parents/UpdateParentUseCase';
 import parentRepository from '../../infrastructure/repositories/ParentRepository';
+import { savePhoto, removePhoto } from '../../infrastructure/storage/PhotoStorage';
 
 const createParentUseCase = new CreateParentUseCase(parentRepository);
 const updateParentUseCase = new UpdateParentUseCase(parentRepository);
@@ -8,13 +9,61 @@ const updateParentUseCase = new UpdateParentUseCase(parentRepository);
 class ParentController {
   async list(req, res, next) {
     try {
-      const { search = '', page = 1, limit = 20 } = req.query;
+      const { search = '', page = 1, limit = 20, status } = req.query;
       const result = await parentRepository.findMany({
         search,
         page: parseInt(page),
         limit: parseInt(limit),
+        status,
       });
       res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async get(req, res, next) {
+    try {
+      const parent = await parentRepository.findById(req.params.id);
+      if (!parent) return res.status(404).json({ success: false, message: 'Parent not found' });
+      res.json({ success: true, data: { parent } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async uploadPhoto(req, res, next) {
+    let saved: string | null = null;
+    try {
+      const existing = await parentRepository.findById(req.params.id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Parent not found' });
+
+      saved = await savePhoto(req.file.buffer, 'parents');
+      await parentRepository.setPhoto(existing.userId, saved);
+      await removePhoto(existing.user.avatarUrl);
+      res.json({ success: true, data: { parent: await parentRepository.findById(existing.parentId) } });
+    } catch (error) {
+      await removePhoto(saved); // don't leave an orphan file if the DB update failed
+      next(error);
+    }
+  }
+
+  async deletePhoto(req, res, next) {
+    try {
+      const existing = await parentRepository.findById(req.params.id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Parent not found' });
+      await parentRepository.setPhoto(existing.userId, null);
+      await removePhoto(existing.user.avatarUrl);
+      res.json({ success: true, data: { parent: await parentRepository.findById(existing.parentId) } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async options(req, res, next) {
+    try {
+      const parents = await parentRepository.findOptions();
+      res.json({ success: true, data: { parents } });
     } catch (error) {
       next(error);
     }

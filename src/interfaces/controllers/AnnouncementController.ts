@@ -3,8 +3,12 @@ import announcementRepository from '../../infrastructure/repositories/Announceme
 class AnnouncementController {
   async list(req, res, next) {
     try {
-      const announcements = await announcementRepository.findAll();
-      res.json({ success: true, data: announcements });
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const search = req.query.search || '';
+
+      const result = await announcementRepository.findAll({ page, limit, search });
+      res.json({ success: true, data: result.data, meta: result.meta });
     } catch (error) {
       next(error);
     }

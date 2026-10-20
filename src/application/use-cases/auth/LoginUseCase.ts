@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { normalizeLaoPhone } from '../../../domain/phone';
 
 class LoginUseCase { userAdminRepository?: any;
   /**
@@ -28,10 +29,13 @@ class LoginUseCase { userAdminRepository?: any;
     if (phoneOrEmail.includes('@')) {
       user = await this.userRepository.findByEmail(phoneOrEmail);
     } else {
-      user = await this.userRepository.findByPhoneNumber(phoneOrEmail);
+      // Stored as "+856 20 XXXX XXXX"; accept 020…, 20…, +85620… with or without spaces.
+      user = await this.userRepository.findByPhoneNumber(normalizeLaoPhone(phoneOrEmail) ?? phoneOrEmail);
     }
 
-    if (!user) {
+    // No password yet = the person exists (e.g. a teacher) but no login account was opened.
+    // Same message as a wrong password so it doesn't reveal which records exist.
+    if (!user || !user.passwordHash) {
       throw new Error('Invalid credentials');
     }
 

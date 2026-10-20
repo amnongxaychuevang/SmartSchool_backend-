@@ -24,6 +24,15 @@ class SubjectController {
     }
   }
 
+  async listAll(req, res, next) {
+    try {
+      const result = await subjectRepository.findAll();
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async create(req, res, next) {
     try {
       const subject = await createSubjectUseCase.execute(req.body);

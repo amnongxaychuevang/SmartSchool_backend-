@@ -10,9 +10,9 @@ const deleteGradeUseCase = new DeleteGradeUseCase(gradeRepository);
 class GradeController {
   async list(req, res, next) {
     try {
-      const { studentId, subjectId, classId, termId, gradeMonth, page = 1, limit = 30 } = req.query;
+      const { studentId, subjectId, classId, termId, gradeMonth, search, page = 1, limit = 30 } = req.query;
       const result = await gradeRepository.findMany({
-        studentId, subjectId, classId, termId, gradeMonth,
+        studentId, subjectId, classId, termId, gradeMonth, search,
         page: parseInt(page),
         limit: parseInt(limit),
       });
@@ -61,6 +61,14 @@ class GradeController {
   async delete(req, res, next) {
     try {
       const { id } = req.params;
+      // A teacher may only delete grades they recorded.
+      if (req.user?.role === 'teacher') {
+        const existing = await gradeRepository.findById(id);
+        if (!existing) throw Object.assign(new Error('Grade not found'), { statusCode: 404 });
+        if (existing.teacherId !== req.user.userId) {
+          throw Object.assign(new Error('You can only delete grades you recorded'), { statusCode: 403 });
+        }
+      }
       await deleteGradeUseCase.execute(id);
       res.json({ success: true });
     } catch (error) {

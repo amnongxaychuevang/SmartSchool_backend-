@@ -8,6 +8,8 @@ import attendanceController from '../../interfaces/controllers/AttendanceControl
 import walletController from '../../interfaces/controllers/WalletController';
 import walletAdminController from '../../interfaces/controllers/WalletAdminController';
 import studentController from '../../interfaces/controllers/StudentController';
+import ethnicityController from '../../interfaces/controllers/EthnicityController';
+import provinceController from '../../interfaces/controllers/ProvinceController';
 import userController from '../../interfaces/controllers/UserController';
 import classController from '../../interfaces/controllers/ClassController';
 import dashboardController from '../../interfaces/controllers/DashboardController';
@@ -33,13 +35,16 @@ import feeController from '../../interfaces/controllers/FeeController';
 // Middlewares
 import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
 import validate from '../../interfaces/middlewares/validate';
+import uploadImage from '../../interfaces/middlewares/uploadImage';
+import uploadPdf from '../../interfaces/middlewares/uploadPdf';
+import { saveSlip } from '../../infrastructure/storage/PhotoStorage';
 import {
   loginSchema, refreshTokenSchema, logoutSchema, attendanceScanSchema,
   dailyAttendanceQuerySchema, dailyAttendanceSaveSchema, attendanceReportQuerySchema, absenceNotifySchema,
   walletProcessSchema, walletTopUpSchema, walletStatusUpdateSchema,
   topUpCreateSchema, topUpRejectSchema,
   studentCreateSchema, studentUpdateSchema,
-  userCreateSchema, userUpdateSchema,
+  userCreateSchema, userUpdateSchema, teacherAccountSchema,
   teacherCreateSchema, teacherUpdateSchema,
   parentCreateSchema, parentUpdateSchema,
   classCreateSchema, classUpdateSchema,
@@ -63,6 +68,9 @@ import {
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  // Only failed attempts count: guessing is still capped at 10, but people who sign in
+  // correctly (several staff behind one school IP) are never locked out.
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many login attempts, please try again later' },
@@ -90,18 +98,31 @@ router.post('/auth/logout', validate(logoutSchema), authController.logout);
 
 // ─── Dashboard (Admin) ──────────────────────────────────
 router.get('/dashboard/stats', AuthMiddleware.verifyToken, AuthMiddleware.authorize('dashboard.view'), dashboardController.stats);
+router.get('/dashboard/finance/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('dashboard.view'), dashboardController.financeOverview);
+router.get('/dashboard/classes/top-performers', AuthMiddleware.verifyToken, AuthMiddleware.authorize('dashboard.view'), dashboardController.topPerformers);
+router.get('/dashboard/announcements', AuthMiddleware.verifyToken, AuthMiddleware.authorize('dashboard.view'), dashboardController.announcements);
+router.get('/dashboard/events/upcoming', AuthMiddleware.verifyToken, AuthMiddleware.authorize('dashboard.view'), dashboardController.upcomingEvents);
 
 // ─── Students (Admin/Teacher) ───────────────────────────
+// Reference data used across pages (any signed-in user).
+router.get('/ethnicities', AuthMiddleware.verifyToken, ethnicityController.list);
+router.get('/provinces', AuthMiddleware.verifyToken, provinceController.list);
+
 router.get('/students', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.list);
 router.get('/students/meta/statuses', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.getStatuses);
+router.get('/students/meta/blood-types', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.getBloodTypes);
 router.get('/students/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.get);
 router.post('/students', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.manage', ['teacher']), validate(studentCreateSchema), studentController.create);
 router.put('/students/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.manage', ['teacher']), validate(studentUpdateSchema), studentController.update);
+router.post('/students/:id/photo', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.manage'), uploadImage('photo'), studentController.uploadPhoto);
+router.delete('/students/:id/photo', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.manage'), studentController.deletePhoto);
 
 
 // ─── Users (Admin) ──────────────────────────────────────
 router.get('/users', AuthMiddleware.verifyToken, AuthMiddleware.authorize('users.manage'), userController.list);
 router.post('/users', AuthMiddleware.verifyToken, AuthMiddleware.authorize('users.manage'), validate(userCreateSchema), userController.create);
+router.get('/users/teacher-candidates', AuthMiddleware.verifyToken, AuthMiddleware.authorize('users.manage'), userController.teacherCandidates);
+router.post('/users/teacher-account', AuthMiddleware.verifyToken, AuthMiddleware.authorize('users.manage'), validate(teacherAccountSchema), userController.openTeacherAccount);
 router.put('/users/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('users.manage'), validate(userUpdateSchema), userController.update);
 
 // ─── Roles ──────────────────────────────────────────────
@@ -114,12 +135,25 @@ router.delete('/roles/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize
 // ─── Teachers (Admin) ───────────────────────────────────
 router.get('/teachers', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.view'), teacherController.list);
 router.post('/teachers', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), validate(teacherCreateSchema), teacherController.create);
+router.get('/teachers/options', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['academics.manage', 'teachers.view']), teacherController.options);
+router.get('/teachers/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.view'), teacherController.get);
 router.put('/teachers/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), validate(teacherUpdateSchema), teacherController.update);
+router.post('/teachers/:id/photo', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), uploadImage('photo'), teacherController.uploadPhoto);
+router.delete('/teachers/:id/photo', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), teacherController.deletePhoto);
+// Signed contracts: private files, streamed only after auth + permission checks.
+router.get('/teachers/:id/documents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.view'), teacherController.listDocuments);
+router.post('/teachers/:id/documents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), uploadPdf('file'), teacherController.uploadDocument);
+router.get('/teachers/:id/documents/:documentId/file', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.view'), teacherController.downloadDocument);
+router.delete('/teachers/:id/documents/:documentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), teacherController.deleteDocument);
 
 // ─── Parents (Admin) ────────────────────────────────────
 router.get('/parents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.view'), parentController.list);
+router.get('/parents/options', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['students.manage', 'parents.view']), parentController.options);
 router.post('/parents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.manage'), validate(parentCreateSchema), parentController.create);
+router.get('/parents/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.view'), parentController.get);
 router.put('/parents/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.manage'), validate(parentUpdateSchema), parentController.update);
+router.post('/parents/:id/photo', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.manage'), uploadImage('photo'), parentController.uploadPhoto);
+router.delete('/parents/:id/photo', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.manage'), parentController.deletePhoto);
 
 // ─── Parents (Parent Portal) ────────────────────────────
 router.get('/parents/me/announcements', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getAnnouncements);
@@ -135,6 +169,9 @@ router.put('/parents/me/children/:studentId/spending-limits', AuthMiddleware.ver
 
 // ─── Classes (Admin/Teacher) ────────────────────────────
 router.get('/classes', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view', ['teacher']), classController.list);
+router.get('/classes/all', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view', ['teacher']), classController.listAll);
+router.get('/classes/academic-years', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view'), classController.academicYears);
+router.get('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view'), classController.get);
 router.post('/classes', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(classCreateSchema), classController.create);
 router.put('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(classUpdateSchema), classController.update);
 router.delete('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), classController.delete);
@@ -172,6 +209,7 @@ router.put('/wallets/:walletId/status', AuthMiddleware.verifyToken, AuthMiddlewa
 
 // ─── Subjects (Admin/Teacher) ───────────────────────────
 router.get('/subjects', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view', ['teacher']), subjectController.list);
+router.get('/subjects/all', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view', ['teacher']), subjectController.listAll);
 router.post('/subjects', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(subjectCreateSchema), subjectController.create);
 router.put('/subjects/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(subjectUpdateSchema), subjectController.update);
 router.delete('/subjects/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), subjectController.delete);
@@ -187,7 +225,7 @@ router.get('/grades', AuthMiddleware.verifyToken, AuthMiddleware.authorize('grad
 router.get('/grade-types', AuthMiddleware.verifyToken, AuthMiddleware.authorize('grades.view', ['teacher']), gradeController.listGradeTypes);
 router.post('/grades', AuthMiddleware.verifyToken, AuthMiddleware.authorize('grades.manage', ['teacher']), validate(gradeCreateSchema), gradeController.create);
 router.put('/grades/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('grades.manage', ['teacher']), validate(gradeUpdateSchema), gradeController.update);
-router.delete('/grades/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('grades.manage'), gradeController.delete);
+router.delete('/grades/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('grades.manage', ['teacher']), gradeController.delete);
 
 // ─── Cards (Admin) ──────────────────────────────────────
 router.get('/cards', AuthMiddleware.verifyToken, AuthMiddleware.authorize('cards.view'), cardController.list);
@@ -200,6 +238,17 @@ router.get('/topup-requests', AuthMiddleware.verifyToken, AuthMiddleware.authori
 router.post('/topup-requests', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), validate(topUpCreateSchema), topUpController.create);
 router.put('/topup-requests/:id/approve', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.topups_approve'), topUpController.approve);
 router.put('/topup-requests/:id/reject', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.topups_approve'), validate(topUpRejectSchema), topUpController.reject);
+
+// ─── Slip Upload ───────────────────────────────────────
+router.post('/uploads/slip', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), uploadImage('slip'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    const url = await saveSlip(req.file.buffer);
+    res.json({ success: true, data: { url } });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ─── Shops ──────────────────────────────────────────────
 router.get('/shops', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.view'), shopController.list);
@@ -238,6 +287,7 @@ router.delete('/academic-terms/:id', AuthMiddleware.verifyToken, AuthMiddleware.
 // ─── Reports (Admin) ────────────────────────────────────
 router.get('/reports/attendance', AuthMiddleware.verifyToken, AuthMiddleware.authorize('reports.view'), validate(attendanceReportQuerySchema, 'query'), reportController.attendance);
 router.post('/reports/attendance/notify', AuthMiddleware.verifyToken, AuthMiddleware.authorize('attendance.manage'), validate(absenceNotifySchema), reportController.notifyAbsence);
+router.get('/reports/shop-sales', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'reports.view']), reportController.shopSales);
 
 // ─── Fees ───────────────────────────────────────────────
 router.get('/fee-types', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.view'), feeController.listTypes);

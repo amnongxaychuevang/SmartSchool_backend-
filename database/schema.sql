@@ -7,9 +7,19 @@ CREATE TABLE `roles` (
     `code` VARCHAR(50) NOT NULL,
     `name_en` VARCHAR(100) NOT NULL,
     `name_lo` VARCHAR(100) NOT NULL,
+    `portal` ENUM('admin', 'teacher', 'parent') NOT NULL DEFAULT 'admin',
+    `is_system` BOOLEAN NOT NULL DEFAULT false,
 
     UNIQUE INDEX `roles_code_key`(`code`),
     PRIMARY KEY (`role_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `role_permissions` (
+    `role_id` INTEGER NOT NULL,
+    `permission` VARCHAR(64) NOT NULL,
+
+    PRIMARY KEY (`role_id`, `permission`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
@@ -19,7 +29,7 @@ CREATE TABLE `users` (
     `full_name_lo` VARCHAR(150) NOT NULL,
     `phone_number` VARCHAR(20) NULL,
     `email` VARCHAR(150) NULL,
-    `password_hash` VARCHAR(255) NOT NULL,
+    `password_hash` VARCHAR(255) NULL,
     `role_id` INTEGER NOT NULL,
     `lang_pref` ENUM('en', 'lo') NOT NULL DEFAULT 'lo',
     `avatar_url` VARCHAR(255) NULL,
@@ -72,10 +82,17 @@ CREATE TABLE `teachers` (
     `teacher_id` INTEGER NOT NULL AUTO_INCREMENT,
     `user_id` INTEGER NOT NULL,
     `employee_code` VARCHAR(20) NOT NULL,
+    `gender` ENUM('male', 'female', 'other') NULL,
     `specialization` VARCHAR(100) NULL,
     `qualification` VARCHAR(150) NULL,
     `hire_date` DATE NULL,
     `salary` DECIMAL(12, 2) NULL,
+    `bank_name` VARCHAR(100) NULL,
+    `bank_account_name` VARCHAR(150) NULL,
+    `bank_account_number` VARCHAR(30) NULL,
+    `province_id` INTEGER NULL,
+    `district_id` INTEGER NULL,
+    `village` VARCHAR(100) NULL,
     `address` TEXT NULL,
     `notes` TEXT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -91,11 +108,12 @@ CREATE TABLE `parents` (
     `parent_id` INTEGER NOT NULL AUTO_INCREMENT,
     `user_id` INTEGER NOT NULL,
     `occupation` VARCHAR(150) NULL,
+    `province_id` INTEGER NULL,
+    `district_id` INTEGER NULL,
+    `village` VARCHAR(100) NULL,
     `address` TEXT NULL,
     `emergency_contact` VARCHAR(20) NULL,
-    `line_id` VARCHAR(50) NULL,
     `national_id` VARCHAR(30) NULL,
-    `notes` TEXT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NULL,
 
@@ -112,8 +130,6 @@ CREATE TABLE `classes` (
     `grade_level_lo` VARCHAR(20) NULL,
     `homeroom_teacher_id` INTEGER NULL,
     `academic_year` VARCHAR(9) NOT NULL,
-    `description_en` TEXT NULL,
-    `description_lo` TEXT NULL,
     `is_active` BOOLEAN NOT NULL DEFAULT true,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
@@ -133,10 +149,10 @@ CREATE TABLE `students` (
     `nationality_en` VARCHAR(50) NOT NULL DEFAULT 'Lao',
     `nationality_lo` VARCHAR(50) NOT NULL DEFAULT 'ລາວ',
     `village` VARCHAR(100) NULL,
-    `district` VARCHAR(100) NULL,
-    `province` VARCHAR(100) NULL,
+    `province_id` INTEGER NULL,
+    `district_id` INTEGER NULL,
     `address` TEXT NULL,
-    `ethnicity` VARCHAR(50) NULL,
+    `ethnicity_id` INTEGER NULL,
     `birth_place` VARCHAR(150) NULL,
     `previous_school` VARCHAR(150) NULL,
     `blood_type` VARCHAR(5) NULL,
@@ -149,6 +165,60 @@ CREATE TABLE `students` (
     UNIQUE INDEX `students_student_code_key`(`student_code`),
     INDEX `students_status_idx`(`status`),
     PRIMARY KEY (`student_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `ethnicities` (
+    `ethnicity_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `code` VARCHAR(30) NOT NULL,
+    `name_lo` VARCHAR(100) NOT NULL,
+    `name_en` VARCHAR(100) NOT NULL,
+    `sort_order` INTEGER NOT NULL DEFAULT 0,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
+
+    UNIQUE INDEX `ethnicities_code_key`(`code`),
+    PRIMARY KEY (`ethnicity_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `teacher_documents` (
+    `document_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `teacher_id` INTEGER NOT NULL,
+    `title` VARCHAR(150) NOT NULL,
+    `original_name` VARCHAR(255) NOT NULL,
+    `stored_name` VARCHAR(100) NOT NULL,
+    `size_bytes` INTEGER NOT NULL,
+    `uploaded_by` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `teacher_documents_stored_name_key`(`stored_name`),
+    INDEX `teacher_documents_teacher_id_idx`(`teacher_id`),
+    PRIMARY KEY (`document_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `provinces` (
+    `province_id` INTEGER NOT NULL,
+    `name_lo` VARCHAR(100) NOT NULL,
+    `name_en` VARCHAR(100) NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
+
+    PRIMARY KEY (`province_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `districts` (
+    `district_id` INTEGER NOT NULL,
+    `province_id` INTEGER NOT NULL,
+    `name_lo` VARCHAR(100) NOT NULL,
+    `name_en` VARCHAR(100) NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
+
+    INDEX `districts_province_id_idx`(`province_id`),
+    PRIMARY KEY (`district_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
@@ -483,6 +553,90 @@ CREATE TABLE `announcements` (
     PRIMARY KEY (`announcement_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `school_settings` (
+    `key` VARCHAR(100) NOT NULL,
+    `value` JSON NOT NULL,
+    `updated_by` INTEGER NULL,
+    `updated_at` DATETIME(3) NOT NULL,
+
+    PRIMARY KEY (`key`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `fee_types` (
+    `fee_type_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name_en` VARCHAR(100) NOT NULL,
+    `name_lo` VARCHAR(100) NOT NULL,
+    `description_en` TEXT NULL,
+    `description_lo` TEXT NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT true,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`fee_type_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `fee_structures` (
+    `fee_structure_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `fee_type_id` INTEGER NOT NULL,
+    `academic_year` VARCHAR(9) NOT NULL,
+    `term_id` INTEGER NULL,
+    `class_id` INTEGER NULL,
+    `amount` DECIMAL(12, 2) NOT NULL,
+    `due_date` DATE NOT NULL,
+    `notes` VARCHAR(255) NULL,
+    `created_by` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `fee_structures_academic_year_idx`(`academic_year`),
+    PRIMARY KEY (`fee_structure_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `invoices` (
+    `invoice_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `invoice_no` VARCHAR(30) NOT NULL,
+    `student_id` INTEGER NOT NULL,
+    `fee_structure_id` INTEGER NOT NULL,
+    `amount` DECIMAL(12, 2) NOT NULL,
+    `discount` DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    `paid_amount` DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    `due_date` DATE NOT NULL,
+    `status` ENUM('unpaid', 'partial', 'paid', 'void') NOT NULL DEFAULT 'unpaid',
+    `notes` VARCHAR(255) NULL,
+    `void_reason` VARCHAR(255) NULL,
+    `issued_by` INTEGER NULL,
+    `issued_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `invoices_invoice_no_key`(`invoice_no`),
+    INDEX `invoices_status_idx`(`status`),
+    INDEX `invoices_due_date_idx`(`due_date`),
+    UNIQUE INDEX `invoices_student_id_fee_structure_id_key`(`student_id`, `fee_structure_id`),
+    PRIMARY KEY (`invoice_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `fee_payments` (
+    `payment_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `receipt_no` VARCHAR(30) NOT NULL,
+    `invoice_id` INTEGER NOT NULL,
+    `amount` DECIMAL(12, 2) NOT NULL,
+    `method` ENUM('cash', 'bank_transfer') NOT NULL,
+    `reference_no` VARCHAR(100) NULL,
+    `notes` VARCHAR(255) NULL,
+    `received_by` INTEGER NULL,
+    `paid_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `fee_payments_receipt_no_key`(`receipt_no`),
+    INDEX `fee_payments_invoice_id_idx`(`invoice_id`),
+    INDEX `fee_payments_paid_at_idx`(`paid_at`),
+    PRIMARY KEY (`payment_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_role_id_fkey` FOREIGN KEY (`role_id`) REFERENCES `roles`(`role_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 -- AddForeignKey
 ALTER TABLE `users` ADD CONSTRAINT `users_role_id_fkey` FOREIGN KEY (`role_id`) REFERENCES `roles`(`role_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -496,13 +650,40 @@ ALTER TABLE `audit_logs` ADD CONSTRAINT `audit_logs_user_id_fkey` FOREIGN KEY (`
 ALTER TABLE `teachers` ADD CONSTRAINT `teachers_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `teachers` ADD CONSTRAINT `teachers_province_id_fkey` FOREIGN KEY (`province_id`) REFERENCES `provinces`(`province_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `teachers` ADD CONSTRAINT `teachers_district_id_fkey` FOREIGN KEY (`district_id`) REFERENCES `districts`(`district_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `parents` ADD CONSTRAINT `parents_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `parents` ADD CONSTRAINT `parents_province_id_fkey` FOREIGN KEY (`province_id`) REFERENCES `provinces`(`province_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `parents` ADD CONSTRAINT `parents_district_id_fkey` FOREIGN KEY (`district_id`) REFERENCES `districts`(`district_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `classes` ADD CONSTRAINT `classes_homeroom_teacher_id_fkey` FOREIGN KEY (`homeroom_teacher_id`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `classes` ADD CONSTRAINT `classes_homeroom_teacher_profile_fkey` FOREIGN KEY (`homeroom_teacher_id`) REFERENCES `teachers`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `students` ADD CONSTRAINT `students_ethnicity_id_fkey` FOREIGN KEY (`ethnicity_id`) REFERENCES `ethnicities`(`ethnicity_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `students` ADD CONSTRAINT `students_province_id_fkey` FOREIGN KEY (`province_id`) REFERENCES `provinces`(`province_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `students` ADD CONSTRAINT `students_district_id_fkey` FOREIGN KEY (`district_id`) REFERENCES `districts`(`district_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `teacher_documents` ADD CONSTRAINT `teacher_documents_teacher_id_fkey` FOREIGN KEY (`teacher_id`) REFERENCES `teachers`(`teacher_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `districts` ADD CONSTRAINT `districts_province_id_fkey` FOREIGN KEY (`province_id`) REFERENCES `provinces`(`province_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `class_students` ADD CONSTRAINT `class_students_class_id_fkey` FOREIGN KEY (`class_id`) REFERENCES `classes`(`class_id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -635,4 +816,31 @@ ALTER TABLE `announcements` ADD CONSTRAINT `announcements_created_by_fkey` FOREI
 
 -- AddForeignKey
 ALTER TABLE `announcements` ADD CONSTRAINT `announcements_class_id_fkey` FOREIGN KEY (`class_id`) REFERENCES `classes`(`class_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `fee_structures` ADD CONSTRAINT `fee_structures_fee_type_id_fkey` FOREIGN KEY (`fee_type_id`) REFERENCES `fee_types`(`fee_type_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `fee_structures` ADD CONSTRAINT `fee_structures_term_id_fkey` FOREIGN KEY (`term_id`) REFERENCES `academic_terms`(`term_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `fee_structures` ADD CONSTRAINT `fee_structures_class_id_fkey` FOREIGN KEY (`class_id`) REFERENCES `classes`(`class_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `fee_structures` ADD CONSTRAINT `fee_structures_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `invoices` ADD CONSTRAINT `invoices_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `invoices` ADD CONSTRAINT `invoices_fee_structure_id_fkey` FOREIGN KEY (`fee_structure_id`) REFERENCES `fee_structures`(`fee_structure_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `invoices` ADD CONSTRAINT `invoices_issued_by_fkey` FOREIGN KEY (`issued_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `fee_payments` ADD CONSTRAINT `fee_payments_invoice_id_fkey` FOREIGN KEY (`invoice_id`) REFERENCES `invoices`(`invoice_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `fee_payments` ADD CONSTRAINT `fee_payments_received_by_fkey` FOREIGN KEY (`received_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 

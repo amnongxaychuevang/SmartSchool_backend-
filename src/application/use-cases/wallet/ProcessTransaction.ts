@@ -1,11 +1,11 @@
 import { startOfSchoolDay, startOfSchoolWeek } from '../../../domain/schoolTime';
+import dispatcher from '../../../infrastructure/notifications/NotificationDispatcher';
 
-class ProcessTransaction { walletRepository: any; shopRepository: any; spendingLimitRepository: any; notificationService: any;
-  constructor(walletRepository, shopRepository, spendingLimitRepository, notificationService) {
+class ProcessTransaction { walletRepository: any; shopRepository: any; spendingLimitRepository: any;
+  constructor(walletRepository, shopRepository, spendingLimitRepository) {
     this.walletRepository = walletRepository;
     this.shopRepository = shopRepository;
     this.spendingLimitRepository = spendingLimitRepository;
-    this.notificationService = notificationService;
   }
 
   /**
@@ -69,9 +69,12 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
       balanceBefore
     );
 
-    // Notify Parent asynchronously
-    this.notificationService.notifyParentTransaction(studentId, numericAmount, balanceAfter, shopId)
-      .catch(err => console.error('Failed to notify parent transaction:', err));
+    dispatcher.notifyParents(
+      studentId,
+      'transaction',
+      `Purchase of ${numericAmount.toLocaleString()} LAK at shop. Balance: ${balanceAfter.toLocaleString()} LAK.`,
+      `ຊຳລະເງິນ ${numericAmount.toLocaleString()} ກີບ ຢູ່ຮ້ານ. ຍອດເຫຼືອ: ${balanceAfter.toLocaleString()} ກີບ.`,
+    ).catch(err => console.error('Failed to notify parent transaction:', err));
 
     return {
       success: true,

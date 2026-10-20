@@ -11,10 +11,12 @@ class CreateSubjectUseCase { userAdminRepository?: any;
       credits, isActive,
     } = data;
 
+    const generatedCode = subjectCode || `SUB-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
     return this.subjectRepository.create({
       subjectNameEn,
       subjectNameLo,
-      ...(subjectCode ? { subjectCode } : {}),
+      subjectCode: generatedCode,
       ...(descriptionEn ? { descriptionEn } : {}),
       ...(descriptionLo ? { descriptionLo } : {}),
       ...(credits !== undefined ? { credits: parseFloat(credits) } : {}),

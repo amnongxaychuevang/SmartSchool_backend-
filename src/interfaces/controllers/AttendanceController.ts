@@ -1,5 +1,4 @@
 import ScanCard from '../../application/use-cases/attendance/ScanCard';
-import notificationService from '../../infrastructure/notifications/TelegramNotificationService';
 import cardRepository from '../../infrastructure/repositories/CardRepository';
 import attendanceRepository from '../../infrastructure/repositories/AttendanceRepository';
 import dailyAttendanceRepository from '../../infrastructure/repositories/DailyAttendanceRepository';
@@ -15,7 +14,6 @@ const assertTeacherClass = async (user, classId: number) => {
 const scanCardUseCase = new ScanCard(
   cardRepository,
   attendanceRepository,
-  notificationService,
   dailyAttendanceRepository
 );
 

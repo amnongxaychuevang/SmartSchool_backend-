@@ -12,14 +12,44 @@ const deleteClassUseCase = new DeleteClassUseCase(classRepository);
 class ClassController {
   async list(req, res, next) {
     try {
-      const { search = '', page = 1, limit = 20 } = req.query;
+      const { search = '', page = 1, limit = 20, academicYear, status } = req.query;
       const result = await getClassesUseCase.execute({
         search,
         page: parseInt(page),
         limit: parseInt(limit),
         teacherUserId: req.user?.role === 'teacher' ? req.user.userId : undefined,
+        academicYear: /^\d{4}-\d{4}$/.test(academicYear) ? academicYear : undefined,
+        status,
       });
       res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listAll(req, res, next) {
+    try {
+      const teacherUserId = req.user?.role === 'teacher' ? req.user.userId : undefined;
+      const result = await classRepository.findAll(teacherUserId);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async get(req, res, next) {
+    try {
+      const schoolClass = await classRepository.findById(req.params.id);
+      if (!schoolClass) return res.status(404).json({ success: false, message: 'Class not found' });
+      res.json({ success: true, data: { class: schoolClass } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async academicYears(req, res, next) {
+    try {
+      res.json({ success: true, data: { academicYears: await classRepository.findAcademicYears() } });
     } catch (error) {
       next(error);
     }

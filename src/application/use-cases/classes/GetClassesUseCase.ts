@@ -4,8 +4,8 @@ class GetClassesUseCase { userAdminRepository?: any;
     this.classRepository = classRepository;
   }
 
-  async execute({ search, page, limit, teacherUserId }: any = {}) {
-    return this.classRepository.findMany({ search, page, limit, teacherUserId });
+  async execute({ search, page, limit, teacherUserId, academicYear, status }: any = {}) {
+    return this.classRepository.findMany({ search, page, limit, teacherUserId, academicYear, status });
   }
 }
 

@@ -3,7 +3,7 @@ import prisma from '../database/PrismaClient';
 // A grade belongs to a ClassSubject (class + subject + term). Responses still carry
 // a top-level `subject` (and now `class` / `term`) so existing screens keep working.
 const include = {
-  student: { select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true } },
+  student: { select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true, photoUrl: true } },
   classSubject: {
     select: {
       id: true,
@@ -30,9 +30,9 @@ export function flattenGrade(grade) {
 }
 
 class GradeRepository {
-  async findMany({ studentId, subjectId, classId, termId, gradeMonth, page = 1, limit = 30 }: any = {}) {
+  async findMany({ studentId, subjectId, classId, termId, gradeMonth, search, page = 1, limit = 30 }: any = {}) {
     const skip = (page - 1) * limit;
-    const where = {
+    const where: any = {
       ...(studentId ? { studentId: parseInt(studentId) } : {}),
       ...(gradeMonth ? { gradeMonth } : {}),
       classSubject: {
@@ -41,6 +41,16 @@ class GradeRepository {
         ...(termId ? { termId: parseInt(termId) } : {}),
       },
     };
+
+    if (search) {
+      where.student = {
+        OR: [
+          { studentCode: { contains: search } },
+          { fullNameEn: { contains: search } },
+          { fullNameLo: { contains: search } },
+        ],
+      };
+    }
 
     const [grades, total] = await Promise.all([
       prisma.grade.findMany({ where, skip, take: limit, orderBy: { recordedAt: 'desc' }, include }),

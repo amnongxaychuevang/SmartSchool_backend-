@@ -1,14 +1,16 @@
-import { z } from 'zod';
-import { ALL_PERMISSIONS } from '../../domain/permissions';
+import { z } from "zod";
+import { BLOOD_TYPES } from "../../domain/bloodTypes";
+import { ALL_PERMISSIONS } from "../../domain/permissions";
+import { LAO_PHONE_PATTERN, normalizeLaoPhone } from "../../domain/phone";
 
 // ─── Auth ───────────────────────────────────────────────
 export const loginSchema = z.object({
-  phoneOrEmail: z.string().min(1, 'Phone number or email is required'),
-  password: z.string().min(1, 'Password is required'),
+  phoneOrEmail: z.string().min(1, "Phone number or email is required"),
+  password: z.string().min(1, "Password is required"),
 });
 
 export const refreshTokenSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
+  refreshToken: z.string().min(1, "Refresh token is required"),
 });
 export const logoutSchema = z.object({
   refreshToken: z.string().min(1).optional(),
@@ -16,13 +18,13 @@ export const logoutSchema = z.object({
 
 // ─── Attendance — hit by gate hardware, keep this permissive/simple ───
 export const attendanceScanSchema = z.object({
-  cardUid: z.string().min(1, 'Card UID is required'),
+  cardUid: z.string().min(1, "Card UID is required"),
   gateLocation: z.string().optional(),
 });
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 export const attendanceReportQuerySchema = z.object({
-  range: z.enum(['today', '7d', '30d']).optional(),
+  range: z.enum(["today", "7d", "30d"]).optional(),
 });
 export const absenceNotifySchema = z.object({
   studentId: z.coerce.number().int().positive(),
@@ -35,35 +37,39 @@ export const dailyAttendanceQuerySchema = z.object({
 export const dailyAttendanceSaveSchema = z.object({
   classId: z.coerce.number().int().positive(),
   date: isoDate,
-  records: z.array(z.object({
-    studentId: z.coerce.number().int().positive(),
-    status: z.enum(['present', 'absent', 'late', 'excused']),
-    note: z.string().max(255).optional(),
-  })).min(1),
+  records: z
+    .array(
+      z.object({
+        studentId: z.coerce.number().int().positive(),
+        status: z.enum(["present", "absent", "late", "excused"]),
+        note: z.string().max(255).optional(),
+      }),
+    )
+    .min(1),
 });
 
 // ─── Wallet purchase — the money-moving endpoint, validate strictly ───
 export const walletProcessSchema = z.object({
   studentId: z.coerce.number().int().positive(),
-  amount: z.coerce.number().positive('Amount must be greater than 0'),
+  amount: z.coerce.number().positive("Amount must be greater than 0"),
   shopId: z.coerce.number().int().positive(),
 });
 
 export const walletTopUpSchema = z.object({
-  amount: z.coerce.number().positive('Amount must be greater than 0'),
+  amount: z.coerce.number().positive("Amount must be greater than 0"),
   descriptionEn: z.string().max(255).optional(),
   descriptionLo: z.string().max(255).optional(),
 });
 
 export const walletStatusUpdateSchema = z.object({
-  status: z.enum(['active', 'frozen']),
+  status: z.enum(["active", "frozen"]),
 });
 
 // ─── Top-up requests ────────────────────────────────────
 export const topUpCreateSchema = z.object({
   studentId: z.coerce.number().int().positive(),
-  amount: z.coerce.number().positive('Amount must be greater than 0'),
-  method: z.enum(['cash', 'mobile_banking', 'admin_manual']),
+  amount: z.coerce.number().positive("Amount must be greater than 0"),
+  method: z.enum(["cash", "mobile_banking", "admin_manual"]),
   methodLabelEn: z.string().max(100).optional(),
   methodLabelLo: z.string().max(100).optional(),
   slipUrl: z.string().max(255).optional(),
@@ -78,103 +84,194 @@ const studentBase = {
   fullNameEn: z.string().min(1).max(150),
   fullNameLo: z.string().min(1).max(150),
   dateOfBirth: z.coerce.date().optional(),
-  gender: z.enum(['male', 'female', 'other']).optional(),
-  photoUrl: z.string().max(255).optional(),
+  gender: z.enum(["male", "female", "other"]).optional(),
   nationalityEn: z.string().max(50).optional(),
   nationalityLo: z.string().max(50).optional(),
   village: z.string().max(100).optional(),
-  district: z.string().max(100).optional(),
-  province: z.string().max(100).optional(),
-  address: z.string().optional(),
-  ethnicity: z.string().max(50).optional(),
+  provinceId: z.coerce.number().int().positive().nullable().optional(),
+  districtId: z.coerce.number().int().positive().nullable().optional(),
+  address: z.string().max(100).optional(),
+  ethnicityId: z.coerce.number().int().positive().nullable().optional(),
   birthPlace: z.string().max(150).optional(),
   previousSchool: z.string().max(150).optional(),
-  bloodType: z.enum(['A', 'B', 'AB', 'O', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']).optional(),
+  bloodType: z.enum(BLOOD_TYPES).optional(),
   medicalNotes: z.string().optional(),
-  status: z.enum(['active', 'inactive', 'graduated', 'transferred']).optional(),
+  status: z.enum(["active", "inactive", "graduated", "transferred"]).optional(),
   notes: z.string().optional(),
   // Current-year class (null = remove from class) and parent links, saved with the student.
   classId: z.coerce.number().int().positive().nullable().optional(),
-  parents: z.array(z.object({
-    parentUserId: z.coerce.number().int().positive(),
-    relationship: z.enum(['father', 'mother', 'guardian', 'grandparent', 'sibling', 'uncle_aunt', 'other']).optional(),
-    isPrimaryContact: z.boolean().optional(),
-  })).optional(),
+  parents: z
+    .array(
+      z.object({
+        parentUserId: z.coerce.number().int().positive(),
+        relationship: z
+          .enum([
+            "father",
+            "mother",
+            "guardian",
+            "grandparent",
+            "sibling",
+            "uncle_aunt",
+            "other",
+          ])
+          .optional(),
+        isPrimaryContact: z.boolean().optional(),
+      }),
+    )
+    .optional(),
 };
-export const studentCreateSchema = z.object({
-  studentCode: z.string().min(1).max(20),
-  ...studentBase,
-});
-// studentCode is editable too (it was silently dropped before).
-export const studentUpdateSchema = z.object({ studentCode: z.string().min(1).max(20), ...studentBase }).partial();
+// studentCode is generated by the server and never changes (it is printed on
+// cards and used in reports); a new student always starts as "active".
+const { status: _status, ...studentCreateFields } = studentBase;
+export const studentCreateSchema = z.object(studentCreateFields);
+export const studentUpdateSchema = z.object(studentBase).partial();
 
 // ─── Users (admin-managed accounts) ────────────────────
 // Login is by phone number or email, so an account needs at least one of them.
-const hasLoginIdentifier = (u: { email?: string; phoneNumber?: string }) => Boolean(u.email || u.phoneNumber?.trim());
-const loginIdentifierError = { message: 'A phone number or an email is required', path: ['phoneNumber'] };
+const hasLoginIdentifier = (u: {
+  email?: string;
+  phoneNumber?: string | null;
+}) => Boolean(u.email || u.phoneNumber?.trim());
+
+// Any typing of a Lao mobile number is stored as "+856 20 XXXX XXXX" (login relies on it).
+// Empty clears the number.
+const toLaoPhone = (v: unknown) => {
+  if (typeof v !== "string") return v;
+  const trimmed = v.trim();
+  if (!trimmed) return null;
+  return normalizeLaoPhone(trimmed) ?? trimmed;
+};
+const LAO_PHONE_ERROR = "The phone number must be +856 20 followed by 8 digits";
+const laoPhone = z
+  .preprocess(
+    toLaoPhone,
+    z.string().regex(LAO_PHONE_PATTERN, LAO_PHONE_ERROR).nullable(),
+  )
+  .optional();
+// Same, but it can't be left out or emptied.
+const requiredLaoPhone = z.preprocess(
+  toLaoPhone,
+  z
+    .string({ message: "A phone number is required" })
+    .regex(LAO_PHONE_PATTERN, LAO_PHONE_ERROR),
+);
+const loginIdentifierError = {
+  message: "A phone number or an email is required",
+  path: ["phoneNumber"],
+};
 
 const userBase = {
   fullNameEn: z.string().min(1).max(150),
   fullNameLo: z.string().min(1).max(150),
   email: z.email().max(150).optional(),
-  phoneNumber: z.string().max(20).optional(),
+  phoneNumber: laoPhone,
   roleId: z.coerce.number().int().positive(),
-  langPref: z.enum(['en', 'lo']).optional(),
+  langPref: z.enum(["en", "lo"]).optional(),
   avatarUrl: z.string().max(255).optional(),
   isActive: z.boolean().optional(),
   password: z.string().min(6).optional(),
 };
-export const userCreateSchema = z.object(userBase).refine(hasLoginIdentifier, loginIdentifierError);
+// A new account always gets its own password — no shared default.
+export const userCreateSchema = z
+  .object({ ...userBase, password: z.string().min(6).max(100) })
+  .refine(hasLoginIdentifier, loginIdentifierError);
 export const userUpdateSchema = z.object(userBase).partial();
 
+// Opens a login for an existing teacher record (their phone/email is the login name).
+export const teacherAccountSchema = z.object({
+  teacherId: z.coerce.number().int().positive(),
+  roleId: z.coerce.number().int().positive(),
+  password: z.string().min(6).max(100),
+});
+
 // ─── Teachers ───────────────────────────────────────────
+// "" / null clear an optional value instead of failing (z.coerce.date() would turn null into 1970).
+const emptyToNull = (v: unknown) => (v === "" || v === null ? null : v);
+
+// employeeCode is generated by the server (TCH-0001…); a new teacher always starts active.
 const teacherBase = {
   fullNameEn: z.string().min(1).max(150),
   fullNameLo: z.string().min(1).max(150),
   email: z.email().max(150).optional(),
-  phoneNumber: z.string().max(20).optional(),
-  password: z.string().min(6).optional(),
-  isActive: z.boolean().optional(),
-  employeeCode: z.string().max(20).optional(),
+  phoneNumber: laoPhone,
+  gender: z
+    .preprocess(emptyToNull, z.enum(["male", "female", "other"]).nullable())
+    .optional(),
   specialization: z.string().max(100).optional(),
   qualification: z.string().max(150).optional(),
-  hireDate: z.coerce.date().optional(),
-  salary: z.coerce.number().nonnegative().optional(),
-  address: z.string().optional(),
+  hireDate: z.preprocess(emptyToNull, z.coerce.date().nullable()).optional(),
+  salary: z
+    .preprocess(emptyToNull, z.coerce.number().nonnegative().nullable())
+    .optional(),
+  // Salary transfer details. The account number is stored as digits only ("0101 2000-1234" → "010120001234").
+  bankName: z.string().max(100).optional(),
+  bankAccountName: z.string().max(150).optional(),
+  bankAccountNumber: z
+    .preprocess(
+      (v) => (typeof v === "string" ? v.replace(/[\s-]/g, "") : v),
+      z.union([
+        z.literal(""),
+        z
+          .string()
+          .regex(/^\d{6,30}$/, "The account number must be 6–30 digits"),
+      ]),
+    )
+    .optional(),
+  provinceId: z.coerce.number().int().positive().nullable().optional(),
+  districtId: z.coerce.number().int().positive().nullable().optional(),
+  village: z.string().max(100).optional(),
+  address: z.string().max(100).optional(),
   notes: z.string().optional(),
 };
-export const teacherCreateSchema = z.object(teacherBase).refine(hasLoginIdentifier, loginIdentifierError);
-export const teacherUpdateSchema = z.object(teacherBase).partial();
+// A teacher record has no login: the account (password + role) is opened later
+// from the Users page. Phone or email is still required — it becomes the login name.
+export const teacherCreateSchema = z
+  .object(teacherBase)
+  .refine(hasLoginIdentifier, loginIdentifierError);
+export const teacherUpdateSchema = z
+  .object({ ...teacherBase, isActive: z.boolean() })
+  .partial();
 
 // ─── Parents (admin CRUD) ───────────────────────────────
+// The phone is the parent's main contact (and login name; many have no email), so it's
+// required and can't be cleared. No password here: how parent logins are opened is decided
+// separately — a new parent has no login until then.
 const parentBase = {
   fullNameEn: z.string().min(1).max(150),
   fullNameLo: z.string().min(1).max(150),
-  email: z.email().max(150).optional(),
-  phoneNumber: z.string().max(20).optional(),
-  password: z.string().min(6).optional(),
+  phoneNumber: requiredLaoPhone,
   isActive: z.boolean().optional(),
   occupation: z.string().max(150).optional(),
-  address: z.string().optional(),
-  emergencyContact: z.string().max(20).optional(),
-  lineId: z.string().max(50).optional(),
+  provinceId: z.coerce.number().int().positive().nullable().optional(),
+  districtId: z.coerce.number().int().positive().nullable().optional(),
+  village: z.string().max(100).optional(),
+  address: z.string().max(100).optional(),
+  emergencyContact: laoPhone,
   nationalId: z.string().max(30).optional(),
-  notes: z.string().optional(),
 };
-export const parentCreateSchema = z.object(parentBase).refine(hasLoginIdentifier, loginIdentifierError);
+export const parentCreateSchema = z.object(parentBase);
 export const parentUpdateSchema = z.object(parentBase).partial();
 
 // ─── Classes ────────────────────────────────────────────
+// "2026-2027": two consecutive years.
+const academicYear = z
+  .string()
+  .regex(/^\d{4}-\d{4}$/, "The academic year must look like 2026-2027")
+  .refine(
+    (y) => Number(y.slice(5)) === Number(y.slice(0, 4)) + 1,
+    "The academic year must be two consecutive years",
+  );
+
 const classBase = {
-  classNameEn: z.string().min(1).max(50),
-  classNameLo: z.string().min(1).max(50),
+  classNameEn: z.string().trim().min(1).max(50),
+  classNameLo: z.string().trim().min(1).max(50),
   gradeLevelEn: z.string().max(20).optional(),
   gradeLevelLo: z.string().max(20).optional(),
-  homeroomTeacherId: z.coerce.number().int().positive().optional(),
-  academicYear: z.string().min(1).max(9),
-  descriptionEn: z.string().optional(),
-  descriptionLo: z.string().optional(),
-  isActive: z.boolean().optional(),
+  // null / "" removes the homeroom teacher.
+  homeroomTeacherId: z
+    .preprocess(emptyToNull, z.coerce.number().int().positive().nullable())
+    .optional(),
+  academicYear,
 };
 export const classCreateSchema = z.object(classBase);
 export const classUpdateSchema = z.object(classBase).partial();
@@ -197,26 +294,38 @@ const gradeBase = {
   gradeTypeId: z.coerce.number().int().positive().optional(),
   score: z.coerce.number().min(0).optional(),
   maxScore: z.coerce.number().positive().optional(),
-  gradeMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Expected YYYY-MM').optional(),
+  gradeMonth: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "Expected YYYY-MM")
+    .optional(),
   remarks: z.string().optional(),
   isPublished: z.boolean().optional(),
 };
-export const gradeCreateSchema = z.object({
-  studentId: z.coerce.number().int().positive(),
-  // Either the ClassSubject directly, or class + subject (resolved in termId / the active term).
-  classSubjectId: z.coerce.number().int().positive().optional(),
-  classId: z.coerce.number().int().positive().optional(),
-  subjectId: z.coerce.number().int().positive().optional(),
-  termId: z.coerce.number().int().positive().optional(),
-  teacherId: z.coerce.number().int().positive().optional(), // admins only; teachers are always themselves
-  ...gradeBase,
-}).refine((g) => g.classSubjectId !== undefined || (g.classId !== undefined && g.subjectId !== undefined), {
-  message: 'Provide classSubjectId, or classId and subjectId',
-  path: ['classSubjectId'],
-});
+export const gradeCreateSchema = z
+  .object({
+    studentId: z.coerce.number().int().positive(),
+    // Either the ClassSubject directly, or class + subject (resolved in termId / the active term).
+    classSubjectId: z.coerce.number().int().positive().optional(),
+    classId: z.coerce.number().int().positive().optional(),
+    subjectId: z.coerce.number().int().positive().optional(),
+    termId: z.coerce.number().int().positive().optional(),
+    teacherId: z.coerce.number().int().positive().optional(), // admins only; teachers are always themselves
+    ...gradeBase,
+  })
+  .refine(
+    (g) =>
+      g.classSubjectId !== undefined ||
+      (g.classId !== undefined && g.subjectId !== undefined),
+    {
+      message: "Provide classSubjectId, or classId and subjectId",
+      path: ["classSubjectId"],
+    },
+  );
 
 // ─── Timetable slots ────────────────────────────────────
-const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM');
+const clockTime = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM");
 export const scheduleSchema = z.object({
   classSubjectId: z.coerce.number().int().positive(),
   dayOfWeek: z.coerce.number().int().min(0).max(6), // 0 = Sunday
@@ -245,7 +354,7 @@ export const cardCreateSchema = z.object({
   notes: z.string().max(255).optional(),
 });
 export const cardUpdateSchema = z.object({
-  status: z.enum(['active', 'lost', 'deactivated']).optional(),
+  status: z.enum(["active", "lost", "deactivated"]).optional(),
   expiredDate: z.coerce.date().optional(),
   notes: z.string().max(255).optional(),
 });
@@ -267,8 +376,15 @@ export const shopUpdateSchema = z.object(shopBase).partial();
 export const notificationCreateSchema = z.object({
   recipientUserId: z.coerce.number().int().positive(),
   studentId: z.coerce.number().int().positive().optional(),
-  type: z.enum(['check_in', 'check_out', 'absence', 'grade', 'transaction', 'general']),
-  channel: z.enum(['sms', 'line', 'telegram', 'app_push', 'email']),
+  type: z.enum([
+    "check_in",
+    "check_out",
+    "absence",
+    "grade",
+    "transaction",
+    "general",
+  ]),
+  channel: z.enum(["whatsapp", "app_push", "email"]),
   messageEn: z.string().min(1),
   messageLo: z.string().min(1),
 });
@@ -276,7 +392,9 @@ export const notificationCreateSchema = z.object({
 // ─── Spending limits (used by both the admin route and the parent-portal route) ───
 // null clears a limit ("no limit"). It must stay null: z.coerce.number() would turn
 // it into 0, which the purchase check treats as "nothing may be spent".
-const optionalMoney = z.union([z.null(), z.coerce.number().nonnegative()]).optional();
+const optionalMoney = z
+  .union([z.null(), z.coerce.number().nonnegative()])
+  .optional();
 export const spendingLimitUpsertSchema = z.object({
   dailyMax: optionalMoney,
   weeklyMax: optionalMoney,
@@ -294,7 +412,7 @@ export const leaveRequestCreateSchema = z.object({
   documentUrl: z.string().max(255).optional(),
 });
 export const leaveRequestStatusUpdateSchema = z.object({
-  status: z.enum(['approved', 'rejected']),
+  status: z.enum(["approved", "rejected"]),
 });
 
 // ─── Announcements ──────────────────────────────────────
@@ -303,14 +421,16 @@ const announcementBase = {
   titleLo: z.string().min(1).max(255),
   contentEn: z.string().min(1),
   contentLo: z.string().min(1),
-  targetAudience: z.enum(['all', 'teachers', 'parents', 'class']).optional(),
+  targetAudience: z.enum(["all", "teachers", "parents", "class"]).optional(),
   classId: z.coerce.number().int().positive().optional(),
   expiryDate: z.coerce.date().optional(),
 };
-export const announcementCreateSchema = z.object(announcementBase).refine(
-  (a) => a.targetAudience !== 'class' || a.classId !== undefined,
-  { message: 'classId is required when targetAudience is "class"', path: ['classId'] },
-);
+export const announcementCreateSchema = z
+  .object(announcementBase)
+  .refine((a) => a.targetAudience !== "class" || a.classId !== undefined, {
+    message: 'classId is required when targetAudience is "class"',
+    path: ["classId"],
+  });
 export const announcementUpdateSchema = z.object(announcementBase).partial();
 
 // ─── Academic terms ─────────────────────────────────────
@@ -320,7 +440,7 @@ const academicTermBase = {
   termNameLo: z.string().min(1).max(50),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
-  status: z.enum(['active', 'upcoming', 'completed']).optional(),
+  status: z.enum(["active", "upcoming", "completed"]).optional(),
 };
 export const academicTermCreateSchema = z.object(academicTermBase);
 export const academicTermUpdateSchema = z.object(academicTermBase).partial();
@@ -328,21 +448,50 @@ export const academicTermUpdateSchema = z.object(academicTermBase).partial();
 // ─── Settings — free-form key/value pairs, so only the shape is checked ───
 // Only known setting groups are accepted, each with a fixed shape.
 // (Academic years and terms are managed as AcademicTerm records, not settings.)
-export const settingsSaveSchema = z.object({
-  schoolInfo: z.object({
-    schoolNameEn: z.string().min(1).max(150),
-    schoolNameLo: z.string().min(1).max(150),
-    contactEmail: z.union([z.email().max(150), z.literal('')]).optional(),
-    contactPhone: z.string().max(30).optional(),
-    addressEn: z.string().max(255).optional(),
-    addressLo: z.string().max(255).optional(),
-  }).optional(),
-}).strict();
+export const settingsSaveSchema = z
+  .object({
+    schoolInfo: z
+      .object({
+        schoolNameEn: z.string().min(1).max(150),
+        schoolNameLo: z.string().min(1).max(150),
+        contactEmail: z.union([z.email().max(150), z.literal("")]).optional(),
+        contactPhone: z.string().max(30).optional(),
+        addressEn: z.string().max(255).optional(),
+        addressLo: z.string().max(255).optional(),
+      })
+      .optional(),
+    whatsapp: z
+      .object({
+        phoneNumberId: z.string().min(1).max(50),
+        accessToken: z.string().min(1).max(500),
+      })
+      .optional(),
+    email: z
+      .object({
+        host: z.string().min(1).max(255),
+        port: z.coerce.number().int().min(1).max(65535).optional(),
+        secure: z.boolean().optional(),
+        user: z.string().min(1).max(255),
+        pass: z.string().min(1).max(255),
+        from: z.string().min(1).max(255),
+      })
+      .optional(),
+    notificationChannel: z
+      .object({
+        default: z.enum(["whatsapp", "email", "app_push"]),
+      })
+      .optional(),
+  })
+  .strict();
 
 // ─── Roles & permissions ────────────────────────────────
-const permissionList = z.array(z.enum(ALL_PERMISSIONS as [string, ...string[]]));
+const permissionList = z.array(
+  z.enum(ALL_PERMISSIONS as [string, ...string[]]),
+);
 export const roleCreateSchema = z.object({
-  code: z.string().regex(/^[a-z][a-z0-9_]{1,48}$/, 'Use lowercase letters, digits and _'),
+  code: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{1,48}$/, "Use lowercase letters, digits and _"),
   nameEn: z.string().min(1).max(100),
   nameLo: z.string().min(1).max(100),
   permissions: permissionList.default([]),
@@ -364,8 +513,10 @@ const feeTypeBase = {
 export const feeTypeCreateSchema = z.object(feeTypeBase);
 export const feeTypeUpdateSchema = z.object(feeTypeBase).partial();
 
-const academicYearString = z.string().regex(/^d{4}-d{4}$/, 'Expected e.g. 2026-2027');
-const kip = z.coerce.number().int('Whole kip only').positive();
+const academicYearString = z
+  .string()
+  .regex(/^d{4}-d{4}$/, "Expected e.g. 2026-2027");
+const kip = z.coerce.number().int("Whole kip only").positive();
 export const feeStructureCreateSchema = z.object({
   feeTypeId: z.coerce.number().int().positive(),
   academicYear: academicYearString,
@@ -382,13 +533,18 @@ export const invoiceUpdateSchema = z.object({
   dueDate: z.coerce.date().optional(),
   notes: z.string().max(255).optional(),
 });
-export const invoiceVoidSchema = z.object({ reason: z.string().min(1).max(255) });
-export const feePaymentSchema = z.object({
-  amount: kip,
-  method: z.enum(['cash', 'bank_transfer']),
-  referenceNo: z.string().max(100).optional(),
-  notes: z.string().max(255).optional(),
-  paidAt: z.coerce.date().optional(),
-}).refine((p) => p.method !== 'bank_transfer' || !!p.referenceNo, {
-  message: 'A bank transfer needs its reference number', path: ['referenceNo'],
+export const invoiceVoidSchema = z.object({
+  reason: z.string().min(1).max(255),
 });
+export const feePaymentSchema = z
+  .object({
+    amount: kip,
+    method: z.enum(["cash", "bank_transfer"]),
+    referenceNo: z.string().max(100).optional(),
+    notes: z.string().max(255).optional(),
+    paidAt: z.coerce.date().optional(),
+  })
+  .refine((p) => p.method !== "bank_transfer" || !!p.referenceNo, {
+    message: "A bank transfer needs its reference number",
+    path: ["referenceNo"],
+  });

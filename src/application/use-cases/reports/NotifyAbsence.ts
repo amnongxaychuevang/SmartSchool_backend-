@@ -1,4 +1,5 @@
 import prisma from '../../../infrastructure/database/PrismaClient';
+import dispatcher from '../../../infrastructure/notifications/NotificationDispatcher';
 import { schoolDateValue } from '../../../domain/schoolTime';
 
 /**
@@ -32,13 +33,18 @@ class NotifyAbsence {
     });
     if (existing) throw Object.assign(new Error('Parents were already notified for this date'), { statusCode: 409 });
 
+    const channelSetting = await prisma.schoolSetting.findUnique({
+      where: { key: 'notificationChannel' },
+    });
+    const channel = (channelSetting?.value as any)?.default || 'whatsapp';
+
     const excused = status === 'excused';
-    await prisma.notification.createMany({
+    const notifications = await prisma.notification.createManyAndReturn({
       data: student.parentStudents.map((link) => ({
         recipientUserId: link.parentUserId,
         studentId,
         type: 'absence' as const,
-        channel: 'app_push' as const,
+        channel: channel as any,
         status: 'pending' as const,
         messageEn: excused
           ? `${student.fullNameEn} is on approved leave on ${date}.`
@@ -48,6 +54,12 @@ class NotifyAbsence {
           : `${student.fullNameLo} ບໍ່ໄດ້ມາໂຮງຮຽນໃນວັນທີ ${date}. ກະລຸນາຕິດຕໍ່ຄູປະຈຳຫ້ອງ.`,
       })),
     });
+
+    for (const n of notifications) {
+      dispatcher.dispatch(n.notificationId).catch((err) =>
+        console.error(`[NotifyAbsence] dispatch failed id=${n.notificationId}:`, err.message),
+      );
+    }
 
     return { studentId, date, recipients: student.parentStudents.length, notification: 'pending' as const };
   }

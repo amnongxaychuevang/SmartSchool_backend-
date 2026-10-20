@@ -1,23 +1,43 @@
 import prisma from '../database/PrismaClient';
 import { currentEnrolmentWhere } from './AcademicYear';
 import { scheduleInclude, flattenSchedule } from './ScheduleRepository';
+import { ADDRESS_INCLUDE, checkAddress } from './Address';
+
+// Never select the whole user row: it holds the password hash.
+const USER_SELECT = {
+  userId: true, fullNameEn: true, fullNameLo: true, email: true,
+  phoneNumber: true, avatarUrl: true, isActive: true, lastLogin: true,
+} as const;
+
+// The children linked to a parent (from the student form), for the list and the summary card.
+const CHILDREN_SELECT = {
+  select: {
+    relationship: true,
+    isPrimaryContact: true,
+    student: { select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true, photoUrl: true, status: true } },
+  },
+  orderBy: { studentId: 'asc' },
+} as const;
 
 class ParentRepository {
   /**
-   * List parents with user info, optional search
+   * List parents with user info; optional search and active/inactive filter.
    */
-  async findMany({ search = '', page = 1, limit = 20 }: any = {}) {
+  async findMany({ search = '', page = 1, limit = 20, status }: any = {}) {
     const skip = (page - 1) * limit;
-    const where = search
-      ? {
-          OR: [
-            { user: { fullNameEn: { contains: search } } },
-            { user: { fullNameLo: { contains: search } } },
-            { user: { email: { contains: search } } },
-            { user: { phoneNumber: { contains: search } } },
-          ],
-        }
-      : {};
+    const where = {
+      ...(status === 'active' || status === 'inactive' ? { user: { isActive: status === 'active' } } : {}),
+      ...(search
+        ? {
+            OR: [
+              { user: { fullNameEn: { contains: search } } },
+              { user: { fullNameLo: { contains: search } } },
+              { user: { email: { contains: search } } },
+              { user: { phoneNumber: { contains: search } } },
+            ],
+          }
+        : {}),
+    };
 
     const [parents, total] = await Promise.all([
       prisma.parent.findMany({
@@ -25,18 +45,17 @@ class ParentRepository {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              userId: true,
-              fullNameEn: true,
-              fullNameLo: true,
-              email: true,
-              phoneNumber: true,
-              isActive: true,
-              lastLogin: true,
-            },
-          },
+        // Only what the list shows — the national ID stays on the single-parent API.
+        select: {
+          parentId: true,
+          userId: true,
+          occupation: true,
+          village: true,
+          address: true,
+          emergencyContact: true,
+          ...ADDRESS_INCLUDE,
+          user: { select: USER_SELECT },
+          studentLinks: CHILDREN_SELECT,
         },
       }),
       prisma.parent.count({ where }),
@@ -45,35 +64,45 @@ class ParentRepository {
     return { parents, total, page, limit };
   }
 
-  async findById(parentId) {
-    return prisma.parent.findUnique({
-      where: { parentId: parseInt(parentId) },
-      include: { user: true },
+  /** Every active parent, just enough to pick one from a list (no pagination). */
+  async findOptions() {
+    const users = await prisma.user.findMany({
+      where: { isActive: true, parent: { isNot: null } },
+      select: { userId: true, fullNameEn: true, fullNameLo: true, phoneNumber: true },
+      orderBy: { fullNameLo: 'asc' },
     });
+    return users;
+  }
+
+  async findById(parentId) {
+    const id = parseInt(parentId);
+    if (!Number.isInteger(id)) return null;
+    return prisma.parent.findUnique({
+      where: { parentId: id },
+      include: { user: { select: USER_SELECT }, ...ADDRESS_INCLUDE, studentLinks: CHILDREN_SELECT },
+    });
+  }
+
+  async setPhoto(userId: number, avatarUrl: string | null) {
+    await prisma.user.update({ where: { userId }, data: { avatarUrl } });
   }
 
   async create(userData, parentData) {
     return prisma.$transaction(async (tx) => {
+      await checkAddress(tx, parentData);
       const user = await tx.user.create({ data: { ...userData, role: { connect: { code: 'parent' } } } });
-      const parent = await tx.parent.create({
+      return tx.parent.create({
         data: { ...parentData, userId: user.userId },
-        include: {
-          user: {
-            select: {
-              userId: true, fullNameEn: true, fullNameLo: true,
-              email: true, phoneNumber: true, isActive: true, lastLogin: true,
-            },
-          },
-        },
+        include: { user: { select: USER_SELECT }, ...ADDRESS_INCLUDE, studentLinks: CHILDREN_SELECT },
       });
-      return parent;
     });
   }
 
   async update(parentId, userData, parentData) {
     return prisma.$transaction(async (tx) => {
       const existing = await tx.parent.findUnique({ where: { parentId: parseInt(parentId) } });
-      if (!existing) throw new Error('Parent not found');
+      if (!existing) throw Object.assign(new Error('Parent not found'), { statusCode: 404 });
+      await checkAddress(tx, parentData, async () => existing.districtId);
 
       if (Object.keys(userData).length > 0) {
         await tx.user.update({ where: { userId: existing.userId }, data: userData });
@@ -82,14 +111,7 @@ class ParentRepository {
       return tx.parent.update({
         where: { parentId: parseInt(parentId) },
         data: parentData,
-        include: {
-          user: {
-            select: {
-              userId: true, fullNameEn: true, fullNameLo: true,
-              email: true, phoneNumber: true, isActive: true, lastLogin: true,
-            },
-          },
-        },
+        include: { user: { select: USER_SELECT }, ...ADDRESS_INCLUDE, studentLinks: CHILDREN_SELECT },
       });
     });
   }

@@ -39,6 +39,18 @@ class SubjectRepository {
     return { subjects, total, page, limit };
   }
 
+  async findAll() {
+    return prisma.subject.findMany({
+      orderBy: { subjectNameEn: 'asc' },
+      select: {
+        subjectId: true,
+        subjectCode: true,
+        subjectNameEn: true,
+        subjectNameLo: true,
+      }
+    });
+  }
+
   async findById(subjectId) {
     return prisma.subject.findUnique({
       where: { subjectId: parseInt(subjectId) },
