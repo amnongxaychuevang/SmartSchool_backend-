@@ -78,6 +78,8 @@ model User {
   requestedLeaves       LeaveRequest[]      @relation("ParentLeaveRequester")
   approvedLeaves        LeaveRequest[]      @relation("LeaveApprover")
   createdAnnouncements  Announcement[]      @relation("AnnouncementCreator")
+  createdEvents         SchoolEvent[]       @relation("SchoolEventCreator")
+  createdAssignments    Assignment[]        @relation("AssignmentCreator")
   teacher               Teacher?
   parent                Parent?
   refreshTokens         RefreshToken[]      @relation("UserRefreshTokens")
@@ -241,6 +243,7 @@ model Class {
   classStudents          ClassStudent[]
 
   announcements Announcement[]
+  assignments   Assignment[]
 
   classSubjects ClassSubject[]
   feeStructures FeeStructure[]
@@ -518,6 +521,7 @@ model Subject {
   isActive      Boolean @default(true) @map("is_active")
 
   classSubjects ClassSubject[]
+  assignments   Assignment[]
 
   @@map("subjects")
 }
@@ -702,6 +706,7 @@ enum NotificationType {
   grade
   transaction
   general
+  fee
 }
 
 enum NotificationChannel {
@@ -854,6 +859,36 @@ enum AnnouncementAudience {
   class
 }
 
+enum SchoolEventType {
+  holiday
+  exam
+  activity
+  meeting
+  other
+}
+
+// School calendar: holidays, exams, activities. An event with schoolClosed set is
+// a day off — attendance does not mark anyone absent on it.
+model SchoolEvent {
+  eventId       Int             @id @default(autoincrement()) @map("event_id")
+  titleEn       String          @map("title_en") @db.VarChar(150)
+  titleLo       String          @map("title_lo") @db.VarChar(150)
+  descriptionEn String?         @map("description_en") @db.Text
+  descriptionLo String?         @map("description_lo") @db.Text
+  type          SchoolEventType
+  startDate     DateTime        @map("start_date") @db.Date
+  endDate       DateTime        @map("end_date") @db.Date
+  schoolClosed  Boolean         @default(false) @map("school_closed")
+  createdBy     Int?            @map("created_by")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  creator User? @relation("SchoolEventCreator", fields: [createdBy], references: [userId], onDelete: SetNull)
+
+  @@index([startDate, endDate])
+  @@map("school_events")
+}
+
 model Announcement {
   announcementId Int                  @id @default(autoincrement()) @map("announcement_id")
   titleEn        String               @map("title_en") @db.VarChar(255)
@@ -934,19 +969,23 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  invoiceId      Int           @id @default(autoincrement()) @map("invoice_id")
-  invoiceNo      String        @unique @map("invoice_no") @db.VarChar(30)
-  studentId      Int           @map("student_id")
-  feeStructureId Int           @map("fee_structure_id")
-  amount         Decimal       @db.Decimal(12, 2)
-  discount       Decimal       @default(0) @db.Decimal(12, 2)
-  paidAmount     Decimal       @default(0) @map("paid_amount") @db.Decimal(12, 2)
-  dueDate        DateTime      @map("due_date") @db.Date
-  status         InvoiceStatus @default(unpaid)
-  notes          String?       @db.VarChar(255)
-  voidReason     String?       @map("void_reason") @db.VarChar(255)
-  issuedBy       Int?          @map("issued_by")
-  issuedAt       DateTime      @default(now()) @map("issued_at")
+  invoiceId        Int           @id @default(autoincrement()) @map("invoice_id")
+  invoiceNo        String        @unique @map("invoice_no") @db.VarChar(30)
+  studentId        Int           @map("student_id")
+  feeStructureId   Int           @map("fee_structure_id")
+  amount           Decimal       @db.Decimal(12, 2)
+  discount         Decimal       @default(0) @db.Decimal(12, 2)
+  paidAmount       Decimal       @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  dueDate          DateTime      @map("due_date") @db.Date
+  status           InvoiceStatus @default(unpaid)
+  notes            String?       @db.VarChar(255)
+  voidReason       String?       @map("void_reason") @db.VarChar(255)
+  issuedBy         Int?          @map("issued_by")
+  issuedAt         DateTime      @default(now()) @map("issued_at")
+  // Automatic reminders already sent (see domain/feeReminders.ts), so none is sent twice.
+  reminderBeforeAt DateTime?     @map("reminder_before_at")
+  overdueReminders Int           @default(0) @map("overdue_reminders")
+  lastReminderAt   DateTime?     @map("last_reminder_at")
 
   student      Student      @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
   feeStructure FeeStructure @relation(fields: [feeStructureId], references: [feeStructureId], onDelete: Restrict)
@@ -982,4 +1021,24 @@ model FeePayment {
   @@index([invoiceId])
   @@index([paidAt])
   @@map("fee_payments")
+}
+
+// Homework a teacher sets for a class; parents of the class's students see it with its due date.
+model Assignment {
+  assignmentId Int      @id @default(autoincrement()) @map("assignment_id")
+  classId      Int      @map("class_id")
+  subjectId    Int?     @map("subject_id")
+  title        String   @db.VarChar(200)
+  description  String?  @db.Text
+  dueDate      DateTime @map("due_date") @db.Date
+  createdBy    Int?     @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  class   Class    @relation(fields: [classId], references: [classId], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [subjectId], onDelete: SetNull)
+  creator User?    @relation("AssignmentCreator", fields: [createdBy], references: [userId], onDelete: SetNull)
+
+  @@index([classId, dueDate])
+  @@map("assignments")
 }

@@ -98,7 +98,8 @@ class NotificationDispatcher {
       | "absence"
       | "grade"
       | "transaction"
-      | "general",
+      | "general"
+      | "fee",
     messageEn: string,
     messageLo: string,
   ): Promise<number> {

@@ -2,13 +2,23 @@ import prisma from '../../infrastructure/database/PrismaClient';
 import feeRepository from '../../infrastructure/repositories/FeeRepository';
 import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
 import { getCurrentAcademicYear } from '../../infrastructure/repositories/AcademicYear';
+import SendFeeReminders from '../../application/use-cases/fees/SendFeeReminders';
 
 const id = (req) => Number(req.params.id);
 const audit = (req, action: string, entityType: string, entityId: number, detail?: unknown) =>
   auditLogRepository.log({ userId: req.user.userId, action, entityType, entityId, detail, ipAddress: req.ip });
 
 // Express 5 forwards rejected promises to the error handler, so handlers can simply throw.
+const sendFeeReminders = new SendFeeReminders();
+
 const FeeController = {
+  // POST /fees/reminders/run — send today's due reminders now instead of waiting for the send time.
+  async runReminders(req, res) {
+    const result = await sendFeeReminders.execute();
+    audit(req, 'create', 'fee_reminders', 0, result);
+    res.json({ success: true, data: result });
+  },
+
   // ── Fee types ──
   async listTypes(req, res) {
     res.json({ success: true, data: { feeTypes: await feeRepository.listTypes() } });

@@ -285,6 +285,20 @@ const academicYear = z
     "The academic year must be two consecutive years",
   );
 
+// ─── School calendar ────────────────────────────────────
+const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+export const calendarQuerySchema = z.object({ from: calendarDate, to: calendarDate });
+export const schoolEventSchema = z.object({
+  titleEn: z.string().trim().min(1).max(150),
+  titleLo: z.string().trim().min(1).max(150),
+  descriptionEn: z.string().max(2000).nullable().optional(),
+  descriptionLo: z.string().max(2000).nullable().optional(),
+  type: z.enum(["holiday", "exam", "activity", "meeting", "other"]),
+  startDate: calendarDate,
+  endDate: calendarDate,
+  schoolClosed: z.boolean(),
+});
+
 // ─── Year-end promotion ─────────────────────────────────
 export const promotionPreviewSchema = z.object({ fromYear: academicYear, toYear: academicYear });
 export const promotionApplySchema = z.object({
@@ -524,6 +538,19 @@ export const settingsSaveSchema = z
       .object({
         default: z.enum(["whatsapp", "email"]),
       })
+      .optional(),
+    feeReminders: z
+      .object({
+        enabled: z.boolean(),
+        daysBefore: z.number().int().min(0).max(60),
+        repeatEveryDays: z.number().int().min(1).max(60),
+        maxOverdue: z.number().int().min(0).max(12),
+        sendTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM"),
+      })
+      .optional(),
+    // Low wallet balance alert for parents who set no threshold of their own; null = off.
+    lowBalanceAlert: z
+      .object({ defaultThreshold: z.number().int().min(0).max(100_000_000).nullable() })
       .optional(),
     autoAbsence: z
       .object({

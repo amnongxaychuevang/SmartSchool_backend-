@@ -3,6 +3,7 @@ import walletRepository from '../../infrastructure/repositories/WalletRepository
 import shopRepository from '../../infrastructure/repositories/ShopRepository';
 import spendingLimitRepository from '../../infrastructure/repositories/SpendingLimitRepository';
 import cardRepository from '../../infrastructure/repositories/CardRepository';
+import settingsRepository from '../../infrastructure/repositories/SettingsRepository';
 import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
 import { startOfSchoolDay } from '../../domain/schoolTime';
 
@@ -12,6 +13,7 @@ const processTransactionUseCase = new ProcessTransaction(
   walletRepository,
   shopRepository,
   spendingLimitRepository,
+  settingsRepository,
 );
 
 const fail = (message: string, statusCode: number) => Object.assign(new Error(message), { statusCode });

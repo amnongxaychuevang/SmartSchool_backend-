@@ -318,7 +318,7 @@ class FeeRepository {
   async invoicesForStudent(studentId: number) {
     const rows = await prisma.invoice.findMany({
       where: { studentId, status: { not: 'void' } },
-      include: { ...invoiceInclude, payments: { orderBy: { paidAt: 'desc' }, select: { receiptNo: true, amount: true, method: true, paidAt: true } } },
+      include: { ...invoiceInclude, payments: { orderBy: { paidAt: 'desc' }, select: { paymentId: true, receiptNo: true, amount: true, method: true, paidAt: true } } },
       orderBy: { dueDate: 'desc' },
     });
     return rows.map((r) => ({ ...present(r), payments: r.payments.map((p) => ({ ...p, amount: num(p.amount) })) }));

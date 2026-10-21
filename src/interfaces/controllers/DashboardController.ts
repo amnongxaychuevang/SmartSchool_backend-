@@ -1,5 +1,6 @@
 import GetDashboardStatsUseCase from '../../application/use-cases/dashboard/GetDashboardStatsUseCase';
 import prisma from '../../infrastructure/database/PrismaClient';
+import schoolEventRepository from '../../infrastructure/repositories/SchoolEventRepository';
 
 const getDashboardStatsUseCase = new GetDashboardStatsUseCase();
 
@@ -160,30 +161,7 @@ class DashboardController {
   async upcomingEvents(req, res, next) {
     try {
       const limit = Math.min(parseInt(req.query.limit) || 5, 50);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const academicTerms = await prisma.academicTerm.findMany({
-        select: {
-          termId: true,
-          termNameEn: true,
-          termNameLo: true,
-          startDate: true,
-          endDate: true,
-        },
-        where: { startDate: { gte: today } },
-        orderBy: { startDate: 'asc' },
-        take: limit,
-      });
-
-      const events = academicTerms.map((term) => ({
-        id: term.termId.toString(),
-        nameEn: term.termNameEn,
-        nameLo: term.termNameLo,
-        date: term.startDate.toISOString(),
-        type: 'event',
-      }));
-
+      const events = await schoolEventRepository.upcomingForDashboard(limit);
       res.json({ success: true, data: { events } });
     } catch (error) {
       next(error);

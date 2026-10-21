@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import prisma from '../database/PrismaClient';
+import schoolEventRepository from '../repositories/SchoolEventRepository';
 
 class DashboardEvents {
   private io: Server;
@@ -138,32 +139,7 @@ class DashboardEvents {
   // Emit upcoming events update (Term 2: 2027-02-01 to 2027-06-30)
   async emitUpcomingEventsUpdate() {
     try {
-      const term2Start = new Date('2027-02-01');
-      const term2End = new Date('2027-06-30');
-
-      const academicTerms = await prisma.academicTerm.findMany({
-        select: {
-          termId: true,
-          termNameEn: true,
-          termNameLo: true,
-          startDate: true,
-          endDate: true,
-        },
-        where: {
-          startDate: { gte: term2Start, lte: term2End },
-        },
-        orderBy: { startDate: 'asc' },
-        take: 5,
-      });
-
-      const events = academicTerms.map((term) => ({
-        id: term.termId.toString(),
-        nameEn: term.termNameEn,
-        nameLo: term.termNameLo,
-        date: term.startDate.toISOString(),
-        type: 'event',
-      }));
-
+      const events = await schoolEventRepository.upcomingForDashboard(5);
       this.io.emit('dashboard:events-updated', { events });
     } catch (error) {
       console.error('Error emitting events update:', error);

@@ -32,8 +32,8 @@ function makeRepos() {
     spendingLimitRepository: {
       findByStudent: vi.fn().mockResolvedValue(null),
     },
-    notificationService: {
-      notifyParentTransaction: vi.fn().mockResolvedValue(undefined),
+    settingsRepository: {
+      getAll: vi.fn().mockResolvedValue({}),
     },
   };
 }
@@ -48,8 +48,27 @@ describe('ProcessTransaction', () => {
       repos.walletRepository,
       repos.shopRepository,
       repos.spendingLimitRepository,
-      repos.notificationService
+      repos.settingsRepository
     );
+  });
+
+  it("flags the purchase that takes the balance below the parent's alert threshold", async () => {
+    repos.walletRepository.findByStudentId.mockResolvedValue(makeWallet({ balance: 15000 }));
+    repos.spendingLimitRepository.findByStudent.mockResolvedValue({ alertThreshold: '10000.00' });
+
+    expect((await useCase.execute(10, 6000, 5, 99)).lowBalance).toBe(true);
+  });
+
+  it('falls back to the school default threshold, and a settings failure never fails the sale', async () => {
+    repos.walletRepository.findByStudentId.mockResolvedValue(makeWallet({ balance: 15000 }));
+    repos.settingsRepository.getAll.mockResolvedValue({ lowBalanceAlert: { defaultThreshold: 10000 } });
+    expect((await useCase.execute(10, 6000, 5, 99)).lowBalance).toBe(true);
+
+    repos.walletRepository.findByStudentId.mockResolvedValue(makeWallet({ balance: 15000 }));
+    repos.settingsRepository.getAll.mockRejectedValue(new Error('db down'));
+    const result = await useCase.execute(10, 6000, 5, 99);
+    expect(result.success).toBe(true);
+    expect(result.lowBalance).toBe(false);
   });
 
   it('deducts the balance and records the transaction on a valid purchase', async () => {

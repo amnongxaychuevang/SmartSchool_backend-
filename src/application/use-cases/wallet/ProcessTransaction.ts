@@ -1,15 +1,17 @@
 import { startOfSchoolDay, startOfSchoolWeek } from '../../../domain/schoolTime';
 import dispatcher from '../../../infrastructure/notifications/NotificationDispatcher';
+import { crossedLowBalance, effectiveThreshold, readLowBalanceDefault } from '../../../domain/lowBalance';
 
 // Business-rule failures carry a 4xx status so the cashier sees the reason;
 // the error handler hides the message of anything that ends up as a 500.
 const fail = (message: string, statusCode: number) => Object.assign(new Error(message), { statusCode });
 
-class ProcessTransaction { walletRepository: any; shopRepository: any; spendingLimitRepository: any;
-  constructor(walletRepository, shopRepository, spendingLimitRepository) {
+class ProcessTransaction { walletRepository: any; shopRepository: any; spendingLimitRepository: any; settingsRepository: any;
+  constructor(walletRepository, shopRepository, spendingLimitRepository, settingsRepository) {
     this.walletRepository = walletRepository;
     this.shopRepository = shopRepository;
     this.spendingLimitRepository = spendingLimitRepository;
+    this.settingsRepository = settingsRepository;
   }
 
   /**
@@ -47,7 +49,7 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
       throw fail('Insufficient balance', 422);
     }
 
-    await this.enforceSpendingLimits(studentId, wallet.walletId, shopId, numericAmount);
+    const limits = await this.enforceSpendingLimits(studentId, wallet.walletId, shopId, numericAmount);
 
     const shopNameEn = shop.shopNameEn || shop.shopNameLo || `shop #${shopId}`;
     const shopNameLo = shop.shopNameLo || shop.shopNameEn || `ຮ້ານ #${shopId}`;
@@ -75,11 +77,21 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
       balanceBefore
     );
 
+    // One message per purchase; a low-balance warning rides along on the purchase that crosses the threshold.
+    // The money has moved already: a settings read that fails must not fail the sale.
+    const schoolDefault = await this.settingsRepository.getAll()
+      .then((s) => readLowBalanceDefault(s.lowBalanceAlert))
+      .catch(() => null);
+    const threshold = effectiveThreshold(limits?.alertThreshold, schoolDefault);
+    const low = crossedLowBalance(Number(balanceBefore), Number(balanceAfter), threshold);
+    const kip = (n: number) => n.toLocaleString('en-US');
     dispatcher.notifyParents(
       studentId,
       'transaction',
-      `Purchase of ${numericAmount.toLocaleString()} LAK at ${shopNameEn}. Balance: ${balanceAfter.toLocaleString()} LAK.`,
-      `ຊຳລະເງິນ ${numericAmount.toLocaleString()} ກີບ ທີ່ ${shopNameLo}. ຍອດເຫຼືອ: ${balanceAfter.toLocaleString()} ກີບ.`,
+      `Purchase of ${kip(numericAmount)} LAK at ${shopNameEn}. Balance: ${kip(balanceAfter)} LAK.`
+        + (low ? ` The balance is now below ${kip(threshold!)} LAK — please top up.` : ''),
+      `ຊຳລະເງິນ ${kip(numericAmount)} ກີບ ທີ່ ${shopNameLo}. ຍອດເຫຼືອ: ${kip(balanceAfter)} ກີບ.`
+        + (low ? ` ຍອດເງິນຕ່ຳກວ່າ ${kip(threshold!)} ກີບແລ້ວ — ກະລຸນາເຕີມເງິນ.` : ''),
     ).catch(err => console.error('Failed to notify parent transaction:', err));
 
     return {
@@ -87,7 +99,8 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
       transactionId: transactionData.referenceNo,
       balanceBefore,
       balanceAfter,
-      amount: numericAmount
+      amount: numericAmount,
+      lowBalance: low,
     };
   }
 
@@ -95,10 +108,11 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
    * Enforces the per-student SpendingLimit configuration (set by a parent) against
    * this purchase: blocked shops, per-transaction cap, and daily/weekly rolling caps.
    * Previously this was a no-op — the SpendingLimit table had zero effect on purchases.
+   * Returns the limits (or null) so the caller can read the low-balance threshold.
    */
   async enforceSpendingLimits(studentId, walletId, shopId, amount) {
     const limits = await this.spendingLimitRepository.findByStudent(studentId);
-    if (!limits) return; // No limits configured for this student
+    if (!limits) return null; // No limits configured for this student
 
     if (Array.isArray(limits.blockedShops) && limits.blockedShops.includes(shopId)) {
       throw fail('This shop is blocked for this student', 422);
@@ -121,6 +135,8 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
         throw fail('This purchase would exceed the weekly spending limit', 422);
       }
     }
+
+    return limits;
   }
 }
 

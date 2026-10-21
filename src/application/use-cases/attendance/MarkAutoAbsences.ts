@@ -3,11 +3,12 @@ import { currentEnrolmentWhere } from '../../../infrastructure/repositories/Acad
 import { schoolDateString, schoolDateValue } from '../../../domain/schoolTime';
 import { isSchoolDay, readAutoAbsenceSettings } from '../../../domain/autoAbsence';
 import NotifyAbsence from '../reports/NotifyAbsence';
+import schoolEventRepository from '../../../infrastructure/repositories/SchoolEventRepository';
 
 const notifyAbsence = new NotifyAbsence();
 
 export type AutoAbsenceResult =
-  | { date: string; ran: false; reason: 'not_school_day' | 'no_active_term' }
+  | { date: string; ran: false; reason: 'not_school_day' | 'no_active_term' | 'holiday' }
   | { date: string; ran: true; marked: number; notified: number };
 
 /**
@@ -31,6 +32,9 @@ class MarkAutoAbsences {
       select: { termId: true },
     });
     if (!term) return { date, ran: false, reason: 'no_active_term' };
+
+    // A day off on the school calendar (holiday, closure): nobody is expected.
+    if (await schoolEventRepository.findClosureOn(day)) return { date, ran: false, reason: 'holiday' };
 
     const missing = await prisma.student.findMany({
       where: {

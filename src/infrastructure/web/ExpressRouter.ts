@@ -32,6 +32,8 @@ import auditLogController from '../../interfaces/controllers/AuditLogController'
 import reportController from '../../interfaces/controllers/ReportController';
 import feeController from '../../interfaces/controllers/FeeController';
 import promotionController from '../../interfaces/controllers/PromotionController';
+import schoolEventController from '../../interfaces/controllers/SchoolEventController';
+import receiptController from '../../interfaces/controllers/ReceiptController';
 
 // Middlewares
 import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
@@ -42,7 +44,7 @@ import { saveSlip, savePaymentQr } from '../../infrastructure/storage/PhotoStora
 import {
   loginSchema, refreshTokenSchema, logoutSchema, attendanceScanSchema,
   changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, walletRefundSchema,
-  promotionPreviewSchema, promotionApplySchema,
+  promotionPreviewSchema, promotionApplySchema, calendarQuerySchema, schoolEventSchema,
   dailyAttendanceQuerySchema, dailyAttendanceSaveSchema, attendanceReportQuerySchema, absenceNotifySchema,
   walletProcessSchema, walletTopUpSchema, walletStatusUpdateSchema,
   topUpCreateSchema, topUpRejectSchema,
@@ -194,6 +196,16 @@ router.post('/classes', AuthMiddleware.verifyToken, AuthMiddleware.authorize('ac
 router.put('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(classUpdateSchema), classController.update);
 router.delete('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), classController.delete);
 
+// ─── Receipts (printable / save as PDF) ─────────────────
+router.get('/receipts/fee/:paymentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.view', ['parent']), receiptController.feePayment);
+router.get('/receipts/topup/:transactionId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.view', ['parent']), receiptController.topUp);
+
+// ─── School calendar ────────────────────────────────────
+router.get('/calendar', AuthMiddleware.verifyToken, validate(calendarQuerySchema, 'query'), schoolEventController.list);
+router.post('/calendar', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(schoolEventSchema), schoolEventController.create);
+router.put('/calendar/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(schoolEventSchema), schoolEventController.update);
+router.delete('/calendar/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), schoolEventController.delete);
+
 // ─── Year-end promotion ─────────────────────────────────
 // Moves students between years and changes their status: both class and student rights are needed.
 router.get('/promotion/preview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(promotionPreviewSchema, 'query'), promotionController.preview);
@@ -331,6 +343,7 @@ router.post('/fee-structures', AuthMiddleware.verifyToken, AuthMiddleware.author
 router.put('/fee-structures/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.manage'), validate(feeStructureUpdateSchema), feeController.updateStructure);
 router.delete('/fee-structures/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.manage'), feeController.deleteStructure);
 router.post('/fee-structures/:id/generate', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.manage'), feeController.generateInvoices);
+router.post('/fees/reminders/run', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.manage'), feeController.runReminders);
 router.get('/invoices', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.view'), feeController.listInvoices);
 router.get('/invoices/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.view'), feeController.getInvoice);
 router.put('/invoices/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.manage'), validate(invoiceUpdateSchema), feeController.updateInvoice);
