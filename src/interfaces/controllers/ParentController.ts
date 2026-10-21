@@ -1,6 +1,10 @@
 import CreateParentUseCase from '../../application/use-cases/parents/CreateParentUseCase';
 import UpdateParentUseCase from '../../application/use-cases/parents/UpdateParentUseCase';
 import parentRepository from '../../infrastructure/repositories/ParentRepository';
+import behaviorRepository from '../../infrastructure/repositories/BehaviorRepository';
+import busRepository from '../../infrastructure/repositories/BusRepository';
+import libraryRepository from '../../infrastructure/repositories/LibraryRepository';
+import assignmentRepository from '../../infrastructure/repositories/AssignmentRepository';
 import settingsRepository from '../../infrastructure/repositories/SettingsRepository';
 import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
 import { savePhoto, removePhoto } from '../../infrastructure/storage/PhotoStorage';
@@ -108,6 +112,43 @@ class ParentController {
       const { studentId } = req.params;
       const attendance = await parentRepository.findChildAttendance(studentId, parentUserId);
       res.json({ success: true, data: attendance });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getChildBehavior(req, res, next) {
+    try {
+      await parentRepository.assertChild(req.params.studentId, req.user.userId);
+      const conduct = await behaviorRepository.getStudentConduct(Number(req.params.studentId));
+      res.json({ success: true, data: { summary: conduct.summary, records: conduct.records } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getChildTransport(req, res, next) {
+    try {
+      await parentRepository.assertChild(req.params.studentId, req.user.userId);
+      res.json({ success: true, data: await busRepository.getStudentTransport(Number(req.params.studentId)) });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getChildLibrary(req, res, next) {
+    try {
+      await parentRepository.assertChild(req.params.studentId, req.user.userId);
+      res.json({ success: true, data: { loans: await libraryRepository.getStudentLoans(Number(req.params.studentId)) } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getChildAssignments(req, res, next) {
+    try {
+      await parentRepository.assertChild(req.params.studentId, req.user.userId);
+      res.json({ success: true, data: { assignments: await assignmentRepository.listForStudent(Number(req.params.studentId)) } });
     } catch (error) {
       next(error);
     }

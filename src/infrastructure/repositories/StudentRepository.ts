@@ -6,9 +6,9 @@ class StudentRepository {
   /**
    * Get paginated list of students with optional search
    */
-  async findMany({ search = '', page = 1, limit = 20, status, classId, gender }: any = {}) {
-    const skip = (page - 1) * limit;
-    const where = {
+  /** The list filters (search, status, class, gender) as a Prisma where — used by the list and its export. */
+  async listWhere({ search = '', status, classId, gender }: any = {}) {
+    return {
       ...(status ? { status } : {}),
       ...(gender ? { gender } : {}),
       ...(classId
@@ -24,6 +24,11 @@ class StudentRepository {
           }
         : {}),
     };
+  }
+
+  async findMany({ search = '', page = 1, limit = 20, status, classId, gender }: any = {}) {
+    const skip = (page - 1) * limit;
+    const where = await this.listWhere({ search, status, classId, gender });
 
     const enrolment = await currentEnrolmentWhere();
     const [students, total] = await Promise.all([

@@ -4,19 +4,27 @@ import Wallet from '../../domain/entities/Wallet';
 const fail = (message: string, statusCode: number) => Object.assign(new Error(message), { statusCode });
 
 class WalletRepository {
-  async findAll({ search = '', page = 1, limit = 20 }: any = {}) {
+  /** The wallet list filters (search, status) as a Prisma where — used by the list and its export. */
+  listWhere({ search = '', status }: any = {}) {
+    return {
+      ...(status === 'active' || status === 'frozen' ? { status } : {}),
+      ...(search
+        ? {
+            student: {
+              OR: [
+                { fullNameEn: { contains: search } },
+                { fullNameLo: { contains: search } },
+                { studentCode: { contains: search } },
+              ],
+            },
+          }
+        : {}),
+    };
+  }
+
+  async findAll({ search = '', status, page = 1, limit = 20 }: any = {}) {
     const skip = (page - 1) * limit;
-    const where = search
-      ? {
-          student: {
-            OR: [
-              { fullNameEn: { contains: search } },
-              { fullNameLo: { contains: search } },
-              { studentCode: { contains: search } },
-            ],
-          },
-        }
-      : {};
+    const where = this.listWhere({ search, status });
 
     const [wallets, total] = await Promise.all([
       prisma.walletAccount.findMany({

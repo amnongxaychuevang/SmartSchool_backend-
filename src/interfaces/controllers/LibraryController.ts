@@ -20,6 +20,24 @@ class LibraryController {
     }
   }
 
+  async updateCategory(req: any, res: any, next: any) {
+    try {
+      const category = await libraryRepository.updateCategory(Number(req.params.id), req.body);
+      res.json({ success: true, data: { category } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteCategory(req: any, res: any, next: any) {
+    try {
+      await libraryRepository.deleteCategory(Number(req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Books
   async listBooks(req: any, res: any, next: any) {
     try {
@@ -87,6 +105,16 @@ class LibraryController {
         processedBy: req.user?.userId,
       });
       res.status(201).json({ success: true, data: { loan } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async renewLoan(req: any, res: any, next: any) {
+    try {
+      const days = Math.min(30, Math.max(1, parseInt(req.body?.days) || 14));
+      const loan = await libraryRepository.renewLoan(Number(req.params.loanId), days);
+      res.json({ success: true, data: { loan } });
     } catch (error) {
       next(error);
     }

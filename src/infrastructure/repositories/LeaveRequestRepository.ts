@@ -2,12 +2,21 @@ import prisma from '../database/PrismaClient';
 import dailyAttendanceRepository from './DailyAttendanceRepository';
 
 class LeaveRequestRepository {
-  async findMany({ studentId, homeroomTeacherId, status, page = 1, limit = 20 }: any = {}) {
+  async findMany({ studentId, homeroomTeacherId, status, search, page = 1, limit = 20 }: any = {}) {
     const skip = (page - 1) * limit;
     const where: any = {};
 
     if (studentId) where.studentId = parseInt(studentId);
     if (status) where.status = status;
+    if (search) {
+      where.student = {
+        OR: [
+          { fullNameLo: { contains: search } },
+          { fullNameEn: { contains: search } },
+          { studentCode: { contains: search } },
+        ],
+      };
+    }
 
     if (homeroomTeacherId) {
       // Find classes where this teacher is homeroom teacher
@@ -34,7 +43,12 @@ class LeaveRequestRepository {
         take: parseInt(limit),
         orderBy: { requestedAt: 'desc' },
         include: {
-          student: { select: { studentCode: true, fullNameEn: true, fullNameLo: true } },
+          student: {
+            select: {
+              studentCode: true, fullNameEn: true, fullNameLo: true, photoUrl: true,
+              classStudents: { where: { leftAt: null }, take: 1, orderBy: { enrolledAt: 'desc' }, select: { class: { select: { classNameEn: true, classNameLo: true } } } },
+            },
+          },
           parent: { select: { fullNameEn: true, fullNameLo: true, phoneNumber: true } },
           approver: { select: { fullNameEn: true, fullNameLo: true } }
         }
@@ -45,8 +59,18 @@ class LeaveRequestRepository {
     return { requests, total, page: parseInt(page), limit: parseInt(limit) };
   }
 
-  async updateStatus(leaveId, status, approvedBy) {
+  // homeroomTeacherId: when a teacher decides, the student must be in one of their homeroom classes.
+  async updateStatus(leaveId, status, approvedBy, homeroomTeacherId: number | null = null) {
     const id = parseInt(leaveId);
+    if (homeroomTeacherId) {
+      const request = await prisma.leaveRequest.findUnique({ where: { leaveId: id }, select: { studentId: true } });
+      if (!request) throw Object.assign(new Error('Leave request not found'), { statusCode: 404 });
+      const inHomeroom = await prisma.classStudent.findFirst({
+        where: { studentId: request.studentId, leftAt: null, class: { homeroomTeacherId } },
+        select: { studentId: true },
+      });
+      if (!inHomeroom) throw Object.assign(new Error('This student is not in your homeroom class'), { statusCode: 403 });
+    }
     return prisma.$transaction(async (tx) => {
       // Conditional update so a request can't be approved twice (or flipped after a decision).
       const claimed = await tx.leaveRequest.updateMany({

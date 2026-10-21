@@ -24,9 +24,9 @@ class ParentRepository {
   /**
    * List parents with user info; optional search and active/inactive filter.
    */
-  async findMany({ search = '', page = 1, limit = 20, status }: any = {}) {
-    const skip = (page - 1) * limit;
-    const where = {
+  /** The list filters as a Prisma where — used by the list and its export. */
+  listWhere({ search = '', status }: any = {}) {
+    return {
       ...(status === 'active' || status === 'inactive' ? { user: { isActive: status === 'active' } } : {}),
       ...(search
         ? {
@@ -39,6 +39,11 @@ class ParentRepository {
           }
         : {}),
     };
+  }
+
+  async findMany({ search = '', page = 1, limit = 20, status }: any = {}) {
+    const skip = (page - 1) * limit;
+    const where = this.listWhere({ search, status });
 
     const [parents, total] = await Promise.all([
       prisma.parent.findMany({
@@ -126,6 +131,15 @@ class ParentRepository {
     });
     // Extract students from the pivot table
     return parentStudents.map(ps => ps.student);
+  }
+
+  /** Throws 403 unless the student is linked to this parent. */
+  async assertChild(studentId, parentUserId) {
+    const link = await prisma.parentStudent.findUnique({
+      where: { uq_parent_student: { parentUserId: parseInt(parentUserId), studentId: parseInt(studentId) } },
+      select: { studentId: true },
+    });
+    if (!link) throw Object.assign(new Error('Unauthorized or not your child'), { statusCode: 403 });
   }
 
   async findChildAttendance(studentId, parentUserId) {

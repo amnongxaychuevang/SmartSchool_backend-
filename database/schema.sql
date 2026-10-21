@@ -78,7 +78,7 @@ CREATE TABLE `password_reset_codes` (
 CREATE TABLE `audit_logs` (
     `audit_id` INTEGER NOT NULL AUTO_INCREMENT,
     `user_id` INTEGER NULL,
-    `action` ENUM('login', 'login_failed', 'logout', 'create', 'update', 'delete', 'approve', 'reject', 'status_change') NOT NULL,
+    `action` ENUM('login', 'login_failed', 'logout', 'create', 'update', 'delete', 'approve', 'reject', 'status_change', 'export') NOT NULL,
     `entity_type` VARCHAR(50) NOT NULL,
     `entity_id` VARCHAR(50) NULL,
     `detail` JSON NULL,
@@ -533,6 +533,25 @@ CREATE TABLE `schedules` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `teacher_leaves` (
+    `leave_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `teacher_user_id` INTEGER NOT NULL,
+    `leave_type` ENUM('sick', 'personal', 'annual', 'maternity', 'other') NOT NULL DEFAULT 'personal',
+    `start_date` DATE NOT NULL,
+    `end_date` DATE NOT NULL,
+    `reason` TEXT NULL,
+    `status` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    `decided_by` INTEGER NULL,
+    `decision_note` VARCHAR(255) NULL,
+    `requested_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `decided_at` DATETIME(3) NULL,
+
+    INDEX `teacher_leaves_teacher_user_id_start_date_idx`(`teacher_user_id`, `start_date`),
+    INDEX `teacher_leaves_status_idx`(`status`),
+    PRIMARY KEY (`leave_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `leave_requests` (
     `leave_id` INTEGER NOT NULL AUTO_INCREMENT,
     `student_id` INTEGER NOT NULL,
@@ -825,6 +844,7 @@ CREATE TABLE `book_loans` (
     `borrowed_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `due_date` DATE NOT NULL,
     `returned_date` DATETIME(3) NULL,
+    `renew_count` INTEGER NOT NULL DEFAULT 0,
     `status` VARCHAR(30) NOT NULL DEFAULT 'borrowed',
     `processed_by` INTEGER NULL,
     `notes` VARCHAR(255) NULL,
@@ -864,28 +884,6 @@ CREATE TABLE `risk_interventions` (
 
     INDEX `risk_interventions_student_id_status_idx`(`student_id`, `status`),
     PRIMARY KEY (`intervention_id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- CreateTable
-CREATE TABLE `schools` (
-    `school_id` INTEGER NOT NULL AUTO_INCREMENT,
-    `school_code` VARCHAR(50) NOT NULL,
-    `name_en` VARCHAR(150) NOT NULL,
-    `name_lo` VARCHAR(150) NOT NULL,
-    `phone` VARCHAR(50) NULL,
-    `email` VARCHAR(150) NULL,
-    `address_en` TEXT NULL,
-    `address_lo` TEXT NULL,
-    `logo_url` VARCHAR(255) NULL,
-    `plan` VARCHAR(50) NOT NULL DEFAULT 'standard',
-    `status` VARCHAR(30) NOT NULL DEFAULT 'active',
-    `max_students` INTEGER NOT NULL DEFAULT 500,
-    `settings` JSON NULL,
-    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `updated_at` DATETIME(3) NULL,
-
-    UNIQUE INDEX `schools_school_code_key`(`school_code`),
-    PRIMARY KEY (`school_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
@@ -1058,6 +1056,12 @@ ALTER TABLE `blocked_shops` ADD CONSTRAINT `blocked_shops_shop_id_fkey` FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE `schedules` ADD CONSTRAINT `schedules_class_subject_id_fkey` FOREIGN KEY (`class_subject_id`) REFERENCES `class_subjects`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `teacher_leaves` ADD CONSTRAINT `teacher_leaves_teacher_user_id_fkey` FOREIGN KEY (`teacher_user_id`) REFERENCES `teachers`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `teacher_leaves` ADD CONSTRAINT `teacher_leaves_decided_by_fkey` FOREIGN KEY (`decided_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `leave_requests` ADD CONSTRAINT `leave_requests_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;

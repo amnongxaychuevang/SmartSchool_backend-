@@ -111,6 +111,29 @@ export class BusRepository {
     });
   }
 
+  // One student's bus assignment and recent rides, for the parent portal.
+  async getStudentTransport(studentId: number) {
+    const [assignment, logs] = await Promise.all([
+      prisma.busStudent.findUnique({
+        where: { studentId },
+        include: {
+          route: { include: { vehicle: true } },
+          vehicle: true,
+        },
+      }),
+      prisma.busLog.findMany({
+        where: { studentId },
+        orderBy: { logTime: 'desc' },
+        take: 30,
+        include: {
+          vehicle: { select: { plateNumber: true } },
+          route: { select: { routeNameEn: true, routeNameLo: true } },
+        },
+      }),
+    ]);
+    return { assignment, logs };
+  }
+
   // ─── Bus Students ──────────────────────────────────────
   async listBusStudents(routeId?: number) {
     const where: any = {};
@@ -128,7 +151,7 @@ export class BusRepository {
             photoUrl: true,
             cards: { where: { status: 'active' }, select: { cardUid: true } },
             classStudents: {
-              select: { class: { select: { nameEn: true, nameLo: true } } },
+              select: { class: { select: { classNameEn: true, classNameLo: true } } },
             },
           },
         },
@@ -318,7 +341,7 @@ export class BusRepository {
               fullNameLo: true,
               photoUrl: true,
               classStudents: {
-                select: { class: { select: { nameEn: true, nameLo: true } } },
+                select: { class: { select: { classNameEn: true, classNameLo: true } } },
               },
             },
           },

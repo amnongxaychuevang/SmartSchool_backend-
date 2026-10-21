@@ -182,8 +182,8 @@ export class RiskAnalyticsRepository {
                   class: {
                     select: {
                       classId: true,
-                      nameEn: true,
-                      nameLo: true,
+                      classNameEn: true,
+                      classNameLo: true,
                       homeroomTeacher: { select: { fullNameEn: true, fullNameLo: true } },
                     },
                   },
@@ -226,9 +226,9 @@ export class RiskAnalyticsRepository {
           take: 30,
         },
         grades: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { recordedAt: 'desc' },
           include: {
-            subject: true,
+            classSubject: { include: { subject: true } },
             gradeType: true,
           },
         },

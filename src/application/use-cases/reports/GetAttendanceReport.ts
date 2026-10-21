@@ -43,7 +43,7 @@ const rate = (attended: number, expected: number) => (expected ? Math.round((att
  * never guessed as present or absent.
  */
 class GetAttendanceReport {
-  async execute(range: ReportRange) {
+  async execute(range: ReportRange, maxAbsentees = 300) {
     const length = RANGE_DAYS[range];
     const term = await prisma.academicTerm.findFirst({ where: { status: 'active' }, select: { startDate: true, endDate: true } });
     const days = schoolDays(length, term);
@@ -160,7 +160,7 @@ class GetAttendanceReport {
       notArrivedToday: current.notArrived,
       excusedShare: rate(current.excused, current.absent + current.excused + current.unrecorded),
       classes,
-      absentees: absentees.slice(0, 300),
+      absentees: absentees.slice(0, maxAbsentees),
     };
   }
 }

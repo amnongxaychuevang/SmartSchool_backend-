@@ -1,10 +1,10 @@
 import prisma from '../database/PrismaClient';
 
 class CardRepository {
-  async findMany({ studentId, status, search, page = 1, limit = 20 }: any = {}) {
-    const skip = (page - 1) * limit;
+  /** The list filters as a Prisma where — used by the list and its export. */
+  listWhere({ studentId, status, search }: any = {}) {
     const q = typeof search === 'string' ? search.trim() : '';
-    const where = {
+    return {
       ...(studentId ? { studentId: parseInt(studentId) } : {}),
       ...(status ? { status } : {}),
       // Card UID, student code or either name.
@@ -17,6 +17,11 @@ class CardRepository {
         ],
       } : {}),
     };
+  }
+
+  async findMany({ studentId, status, search, page = 1, limit = 20 }: any = {}) {
+    const skip = (page - 1) * limit;
+    const where = this.listWhere({ studentId, status, search });
 
     const [cards, total] = await Promise.all([
       prisma.card.findMany({

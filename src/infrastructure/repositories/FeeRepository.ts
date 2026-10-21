@@ -291,11 +291,7 @@ class FeeRepository {
     const since = addDays(startOfSchoolDay(), -183);
     const payments = await prisma.feePayment.findMany({
       where: { paidAt: { gte: since }, invoice: { feeStructure: { academicYear } } },
-      orderBy: { paidAt: 'desc' },
-      include: {
-        invoice: { select: { invoiceNo: true, student: { select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true } } } },
-        receiver: { select: { fullNameEn: true, fullNameLo: true } },
-      },
+      select: { paidAt: true, amount: true },
     });
     const monthly = new Map<string, number>();
     for (const p of payments) {
@@ -310,7 +306,28 @@ class FeeRepository {
       byClass: [...byClass.values()].map((c) => ({ ...c, collectionRate: rate(c.collected, c.billed) })).sort((a, b) => a.classNameEn.localeCompare(b.classNameEn)),
       byFeeType: [...byType.values()].map((x) => ({ ...x, collectionRate: rate(x.collected, x.billed) })),
       monthly: [...monthly.entries()].map(([month, amount]) => ({ month, amount })).sort((a, b) => a.month.localeCompare(b.month)),
-      recentPayments: payments.slice(0, 10).map((p) => ({ ...p, amount: num(p.amount) })),
+    };
+  }
+
+  // Payment history for the report, newest first, one page at a time.
+  async reportPayments(academicYear: string, page: number, limit: number) {
+    const where: Prisma.FeePaymentWhereInput = { invoice: { feeStructure: { academicYear } } };
+    const [rows, total] = await Promise.all([
+      prisma.feePayment.findMany({
+        where,
+        orderBy: { paidAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          invoice: { select: { invoiceNo: true, student: { select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true } } } },
+          receiver: { select: { fullNameEn: true, fullNameLo: true } },
+        },
+      }),
+      prisma.feePayment.count({ where }),
+    ]);
+    return {
+      data: rows.map((p) => ({ ...p, amount: num(p.amount) })),
+      meta: { total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) },
     };
   }
 

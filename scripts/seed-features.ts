@@ -4,26 +4,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding new features data...');
 
-  // 1. Default School
-  await prisma.school.upsert({
-    where: { schoolCode: 'vientiane-smart' },
-    update: {},
-    create: {
-      schoolCode: 'vientiane-smart',
-      nameEn: 'Vientiane Smart Academy',
-      nameLo: 'ໂຮງຮຽນ ສະມາດ ອະຄາເດມີ ວຽງຈັນ',
-      phone: '+856 20 5555 8899',
-      email: 'contact@smartacademy.la',
-      addressEn: 'Dongdok Campus, Vientiane Capital',
-      addressLo: 'ວິທະຍາເຂດດົງໂດກ, ນະຄອນຫຼວງວຽງຈັນ',
-      plan: 'enterprise',
-      status: 'active',
-      maxStudents: 2500,
-    },
-  });
-  console.log('Default School seeded ✓');
-
-  // 2. Behavior Categories
+  // 1. Behavior Categories
   const categories = [
     { nameEn: 'Helping Community & Peers', nameLo: 'ຊ່ວຍເຫຼືອສັງຄົມ ແລະ ໝູ່ເພື່ອນ', type: 'merit' as const, defaultPoints: 10, severity: 'low' },
     { nameEn: 'Academic Dedication & Excellence', nameLo: 'ຜົນການຮຽນດີເດັ່ນ / ຕັ້ງໃຈຮຽນ', type: 'merit' as const, defaultPoints: 10, severity: 'low' },
@@ -47,7 +28,7 @@ async function main() {
   }
   console.log('Behavior categories seeded ✓');
 
-  // 3. Bus Vehicles & Routes
+  // 2. Bus Vehicles & Routes
   const vehicle1 = await prisma.busVehicle.upsert({
     where: { plateNumber: 'ກກ 1234' },
     update: {},
@@ -109,7 +90,7 @@ async function main() {
   });
   console.log('Bus vehicles and routes seeded ✓');
 
-  // 4. Book Categories & Books
+  // 3. Book Categories & Books
   const bookCategories = [
     { nameEn: 'Science & Technology', nameLo: 'ວິທະຍາສາດ ແລະ ເຕັກໂນໂລຊີ' },
     { nameEn: 'Mathematics', nameLo: 'ຄະນິດສາດ' },
@@ -201,7 +182,7 @@ async function main() {
   }
   console.log('Books seeded ✓');
 
-  // 5. Connect 1-2 students to bus and create sample behavior/loan records if students exist
+  // 4. Connect 1-2 students to bus and create sample behavior/loan records if students exist
   const firstStudents = await prisma.student.findMany({ take: 3 });
   if (firstStudents.length > 0) {
     // Assign student 1 to route 1

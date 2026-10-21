@@ -37,8 +37,12 @@ import receiptController from '../../interfaces/controllers/ReceiptController';
 import behaviorController from '../../interfaces/controllers/BehaviorController';
 import busController from '../../interfaces/controllers/BusController';
 import libraryController from '../../interfaces/controllers/LibraryController';
+import assignmentController from '../../interfaces/controllers/AssignmentController';
+import schoolReportController from '../../interfaces/controllers/SchoolReportController';
+import exportController from '../../interfaces/controllers/ExportController';
+import reportExportController from '../../interfaces/controllers/ReportExportController';
+import teacherLeaveController from '../../interfaces/controllers/TeacherLeaveController';
 import riskAnalyticsController from '../../interfaces/controllers/RiskAnalyticsController';
-import schoolController from '../../interfaces/controllers/SchoolController';
 
 // Middlewares
 import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
@@ -72,11 +76,12 @@ import {
   roleCreateSchema, roleUpdateSchema,
   feeTypeCreateSchema, feeTypeUpdateSchema, feeStructureCreateSchema, feeStructureUpdateSchema,
   invoiceUpdateSchema, invoiceVoidSchema, feePaymentSchema,
-  behaviorCategorySchema, behaviorRecordCreateSchema,
+  behaviorCategorySchema, behaviorRecordCreateSchema, behaviorRecordUpdateSchema,
   busVehicleSchema, busRouteSchema, busStudentAssignSchema, busScanSchema,
   bookCategorySchema, bookCreateSchema, bookUpdateSchema, bookBorrowSchema,
   riskInterventionSchema,
-  schoolCreateSchema, schoolUpdateSchema,
+  assignmentCreateSchema, assignmentUpdateSchema,
+  teacherLeaveCreateSchema, teacherLeaveDecisionSchema,
 } from '../../interfaces/validators/schemas';
 
 // Strict limiter for credential-guessing-prone / abuse-prone endpoints.
@@ -135,6 +140,7 @@ router.get('/dashboard/events/upcoming', AuthMiddleware.verifyToken, AuthMiddlew
 router.get('/ethnicities', AuthMiddleware.verifyToken, ethnicityController.list);
 router.get('/provinces', AuthMiddleware.verifyToken, provinceController.list);
 
+router.get('/students/export', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.export'), exportController.students);
 router.get('/students', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.list);
 router.get('/students/meta/statuses', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.getStatuses);
 router.get('/students/meta/blood-types', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.getBloodTypes);
@@ -160,6 +166,7 @@ router.put('/roles/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('r
 router.delete('/roles/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('roles.manage'), roleController.delete);
 
 // ─── Teachers (Admin) ───────────────────────────────────
+router.get('/teachers/export', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.export'), exportController.teachers);
 router.get('/teachers', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.view'), teacherController.list);
 router.post('/teachers', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), validate(teacherCreateSchema), teacherController.create);
 router.get('/teachers/options', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['academics.manage', 'teachers.view']), teacherController.options);
@@ -174,6 +181,7 @@ router.get('/teachers/:id/documents/:documentId/file', AuthMiddleware.verifyToke
 router.delete('/teachers/:id/documents/:documentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), teacherController.deleteDocument);
 
 // ─── Parents (Admin) ────────────────────────────────────
+router.get('/parents/export', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.export'), exportController.parents);
 router.get('/parents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.view'), parentController.list);
 router.get('/parents/options', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['students.manage', 'parents.view']), parentController.options);
 router.post('/parents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.manage'), validate(parentCreateSchema), parentController.create);
@@ -189,6 +197,10 @@ router.get('/parents/me/payment-info', AuthMiddleware.verifyToken, AuthMiddlewar
 router.get('/parents/me/children/:studentId/attendance', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildAttendance);
 router.get('/parents/me/children/:studentId/grades', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildGrades);
 router.get('/parents/me/children/:studentId/wallet', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildWallet);
+router.get('/parents/me/children/:studentId/behavior', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildBehavior);
+router.get('/parents/me/children/:studentId/transport', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildTransport);
+router.get('/parents/me/children/:studentId/library', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildLibrary);
+router.get('/parents/me/children/:studentId/assignments', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildAssignments);
 router.get('/parents/me/children/:studentId/schedule', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildSchedule);
 router.get('/parents/me/children/:studentId/leave-requests', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getLeaveRequests);
 router.post('/parents/me/children/:studentId/leave-requests', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), validate(leaveRequestCreateSchema), parentController.createLeaveRequest);
@@ -274,6 +286,7 @@ router.put('/grades/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('
 router.delete('/grades/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('grades.manage', ['teacher']), gradeController.delete);
 
 // ─── Cards (Admin) ──────────────────────────────────────
+router.get('/cards/export', AuthMiddleware.verifyToken, AuthMiddleware.authorize('cards.export'), exportController.cards);
 router.get('/cards', AuthMiddleware.verifyToken, AuthMiddleware.authorize('cards.view'), cardController.list);
 router.post('/cards', AuthMiddleware.verifyToken, AuthMiddleware.authorize('cards.manage'), validate(cardCreateSchema), cardController.create);
 router.put('/cards/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('cards.manage'), validate(cardUpdateSchema), cardController.update);
@@ -339,6 +352,17 @@ router.put('/academic-terms/:id', AuthMiddleware.verifyToken, AuthMiddleware.aut
 router.delete('/academic-terms/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), academicTermController.delete);
 
 // ─── Reports (Admin) ────────────────────────────────────
+// ─── Report exports (one standard: report filters, bilingual .xlsx, audit-logged) ───
+const reportExport = [AuthMiddleware.verifyToken, AuthMiddleware.authorize('reports.export')];
+router.get('/reports/attendance/export', ...reportExport, reportExportController.attendance);
+router.get('/reports/grades/export', ...reportExport, reportExportController.grades);
+router.get('/reports/wallet/export', ...reportExport, reportExportController.wallet);
+router.get('/reports/fees/export', ...reportExport, reportExportController.fees);
+router.get('/reports/fees/debtors/export', ...reportExport, reportExportController.debtors);
+router.get('/reports/daily-cash/export', ...reportExport, reportExportController.dailyCash);
+router.get('/reports/class-results/export', ...reportExport, reportExportController.classResults);
+router.get('/reports/students', AuthMiddleware.verifyToken, AuthMiddleware.authorize('reports.view'), schoolReportController.studentStats);
+
 router.get('/reports/attendance', AuthMiddleware.verifyToken, AuthMiddleware.authorize('reports.view'), validate(attendanceReportQuerySchema, 'query'), reportController.attendance);
 router.post('/reports/attendance/notify', AuthMiddleware.verifyToken, AuthMiddleware.authorize('attendance.manage'), validate(absenceNotifySchema), reportController.notifyAbsence);
 router.get('/reports/shop-sales', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'reports.view']), reportController.shopSales);
@@ -360,6 +384,10 @@ router.put('/invoices/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize
 router.post('/invoices/:id/void', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.manage'), validate(invoiceVoidSchema), feeController.voidInvoice);
 router.post('/invoices/:id/payments', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.collect'), validate(feePaymentSchema), feeController.recordPayment);
 router.get('/reports/fees', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['fees.view', 'reports.view']), feeController.report);
+router.get('/reports/fees/debtors', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['fees.view', 'reports.view']), schoolReportController.debtors);
+router.get('/reports/daily-cash', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['fees.view', 'finance.view', 'reports.view']), schoolReportController.dailyCash);
+router.get('/reports/class-results', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['grades.view', 'reports.view']), schoolReportController.classResults);
+router.get('/reports/fees/payments', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['fees.view', 'reports.view']), feeController.reportPayments);
 router.get('/parents/me/children/:studentId/invoices', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), feeController.childInvoices);
 
 // ─── Audit Logs (Admin) ─────────────────────────────────
@@ -367,12 +395,16 @@ router.get('/audit-logs', AuthMiddleware.verifyToken, AuthMiddleware.authorize('
 
 // ─── 14. Behavior / Discipline ──────────────────────────
 router.get('/behavior/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view'), behaviorController.getOverview);
-router.get('/behavior/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view'), behaviorController.listCategories);
+router.get('/behavior/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view', ['teacher']), behaviorController.listCategories);
 router.post('/behavior/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage'), validate(behaviorCategorySchema), behaviorController.createCategory);
-router.get('/behavior/records', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view'), behaviorController.listRecords);
-router.post('/behavior/records', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage'), validate(behaviorRecordCreateSchema), behaviorController.createRecord);
-router.delete('/behavior/records/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage'), behaviorController.deleteRecord);
-router.get('/behavior/students/:studentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view'), behaviorController.getStudentConduct);
+router.put('/behavior/categories/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage'), validate(behaviorCategorySchema.partial()), behaviorController.updateCategory);
+router.delete('/behavior/categories/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage'), behaviorController.deleteCategory);
+// Teachers: scoped to their own classes, and to records they wrote (see BehaviorController).
+router.get('/behavior/records', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view', ['teacher']), behaviorController.listRecords);
+router.post('/behavior/records', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage', ['teacher']), validate(behaviorRecordCreateSchema), behaviorController.createRecord);
+router.put('/behavior/records/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage', ['teacher']), validate(behaviorRecordUpdateSchema), behaviorController.updateRecord);
+router.delete('/behavior/records/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage', ['teacher']), behaviorController.deleteRecord);
+router.get('/behavior/students/:studentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view', ['teacher']), behaviorController.getStudentConduct);
 
 // ─── 15. Bus Transportation ─────────────────────────────
 router.get('/bus/vehicles', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.view'), busController.listVehicles);
@@ -397,6 +429,8 @@ router.get('/bus/manifest', AuthMiddleware.verifyToken, AuthMiddleware.authorize
 router.get('/library/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.getOverview);
 router.get('/library/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.listCategories);
 router.post('/library/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), validate(bookCategorySchema), libraryController.createCategory);
+router.put('/library/categories/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), validate(bookCategorySchema.partial()), libraryController.updateCategory);
+router.delete('/library/categories/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), libraryController.deleteCategory);
 
 router.get('/library/books', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.listBooks);
 router.get('/library/books/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.getBook);
@@ -406,6 +440,7 @@ router.delete('/library/books/:id', AuthMiddleware.verifyToken, AuthMiddleware.a
 
 router.get('/library/loans', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.listLoans);
 router.post('/library/borrow', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), validate(bookBorrowSchema), libraryController.borrowBook);
+router.post('/library/loans/:loanId/renew', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), libraryController.renewLoan);
 router.post('/library/loans/:loanId/return', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), libraryController.returnBook);
 
 // ─── 18. At-Risk Student Analytics ──────────────────────
@@ -416,12 +451,17 @@ router.get('/analytics/at-risk/:studentId', AuthMiddleware.verifyToken, AuthMidd
 router.post('/analytics/at-risk/interventions', AuthMiddleware.verifyToken, AuthMiddleware.authorize('analytics.at_risk_manage'), validate(riskInterventionSchema), riskAnalyticsController.createIntervention);
 router.put('/analytics/at-risk/interventions/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('analytics.at_risk_manage'), riskAnalyticsController.updateIntervention);
 
-// ─── 19. Multi-School (SaaS) ────────────────────────────
-router.get('/schools/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.view'), schoolController.getOverview);
-router.get('/schools', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.view'), schoolController.listSchools);
-router.get('/schools/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.view'), schoolController.getSchool);
-router.post('/schools', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.manage'), validate(schoolCreateSchema), schoolController.createSchool);
-router.put('/schools/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.manage'), validate(schoolUpdateSchema), schoolController.updateSchool);
-router.delete('/schools/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.manage'), schoolController.deleteSchool);
+// ─── Teacher leave ──────────────────────────────────────
+router.get('/teacher-leaves/me', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher']), teacherLeaveController.listMine);
+router.post('/teacher-leaves/me', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher']), validate(teacherLeaveCreateSchema), teacherLeaveController.create);
+router.delete('/teacher-leaves/me/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher']), teacherLeaveController.cancel);
+router.get('/teacher-leaves', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.leave_manage'), teacherLeaveController.list);
+router.put('/teacher-leaves/:id/status', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.leave_manage'), validate(teacherLeaveDecisionSchema), teacherLeaveController.decide);
+
+// ─── Homework / Assignments ─────────────────────────────
+router.get('/assignments', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.view', ['teacher']), assignmentController.list);
+router.post('/assignments', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.manage', ['teacher']), validate(assignmentCreateSchema), assignmentController.create);
+router.put('/assignments/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.manage', ['teacher']), validate(assignmentUpdateSchema), assignmentController.update);
+router.delete('/assignments/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.manage', ['teacher']), assignmentController.delete);
 
 export default router;

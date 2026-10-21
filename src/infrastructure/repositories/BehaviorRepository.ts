@@ -1,6 +1,7 @@
 import prisma from '../database/PrismaClient';
 import dispatcher from '../notifications/NotificationDispatcher';
 import { calculateConductScore } from '../../domain/conductScore';
+import { teacherClassesWhere } from './AcademicYear';
 
 export class BehaviorRepository {
   async listCategories() {
@@ -28,11 +29,22 @@ export class BehaviorRepository {
     });
   }
 
+  async updateCategory(categoryId: number, data: { nameEn?: string; nameLo?: string; type?: 'merit' | 'demerit'; defaultPoints?: number; severity?: string }) {
+    return prisma.behaviorCategory.update({ where: { categoryId }, data });
+  }
+
+  // Past records keep their own title and points; only the category link is cleared (onDelete: SetNull).
+  async deleteCategory(categoryId: number) {
+    return prisma.behaviorCategory.delete({ where: { categoryId } });
+  }
+
   async listRecords(query: {
     studentId?: number;
     classId?: number;
     type?: 'merit' | 'demerit';
     search?: string;
+    /** A teacher sees only students currently in the classes they teach or are homeroom teacher of. */
+    teacherUserId?: number;
     page?: number;
     limit?: number;
   }) {
@@ -43,10 +55,13 @@ export class BehaviorRepository {
     const where: any = {};
     if (query.studentId) where.studentId = query.studentId;
     if (query.type) where.type = query.type;
-    if (query.classId) {
+    if (query.classId || query.teacherUserId) {
       where.student = {
         classStudents: {
-          some: { classId: query.classId },
+          some: {
+            ...(query.classId ? { classId: query.classId } : {}),
+            ...(query.teacherUserId ? { leftAt: null, class: await teacherClassesWhere(query.teacherUserId) } : {}),
+          },
         },
       };
     }
@@ -77,7 +92,7 @@ export class BehaviorRepository {
               photoUrl: true,
               classStudents: {
                 select: {
-                  class: { select: { classId: true, nameEn: true, nameLo: true } },
+                  class: { select: { classId: true, classNameEn: true, classNameLo: true } },
                 },
               },
             },
@@ -112,7 +127,7 @@ export class BehaviorRepository {
           fullNameLo: true,
           classStudents: {
             select: {
-              class: { select: { classId: true, nameEn: true, nameLo: true } },
+              class: { select: { classId: true, classNameEn: true, classNameLo: true } },
             },
           },
         },
@@ -203,6 +218,41 @@ export class BehaviorRepository {
     }
 
     return record;
+  }
+
+  // Corrections to a record; the parent is not notified again.
+  async updateRecord(
+    recordId: number,
+    data: {
+      categoryId?: number | null;
+      type?: 'merit' | 'demerit';
+      titleEn?: string;
+      titleLo?: string;
+      description?: string;
+      points?: number;
+      incidentDate?: string;
+      actionTaken?: string;
+    }
+  ) {
+    const { incidentDate, ...rest } = data;
+    return prisma.behaviorRecord.update({
+      where: { recordId },
+      data: { ...rest, ...(incidentDate ? { incidentDate: new Date(incidentDate) } : {}) },
+      include: { category: true, student: true },
+    });
+  }
+
+  /** Whether the student is currently in one of the teacher's classes. */
+  async teacherHasStudent(teacherUserId: number, studentId: number) {
+    const hit = await prisma.classStudent.findFirst({
+      where: { studentId, leftAt: null, class: await teacherClassesWhere(teacherUserId) },
+      select: { studentId: true },
+    });
+    return Boolean(hit);
+  }
+
+  async findRecord(recordId: number) {
+    return prisma.behaviorRecord.findUnique({ where: { recordId }, select: { recordId: true, studentId: true, recordedBy: true } });
   }
 
   async deleteRecord(recordId: number) {

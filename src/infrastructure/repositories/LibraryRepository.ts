@@ -1,5 +1,9 @@
 import prisma from '../database/PrismaClient';
+import { schoolDateValue, addDays } from '../../domain/schoolTime';
 import dispatcher from '../notifications/NotificationDispatcher';
+
+/** How many times one loan may be extended. */
+const MAX_RENEWALS = 2;
 
 export class LibraryRepository {
   // ─── Categories ────────────────────────────────────────
@@ -16,6 +20,30 @@ export class LibraryRepository {
     return prisma.bookCategory.create({
       data,
     });
+  }
+
+  async updateCategory(categoryId: number, data: { nameEn?: string; nameLo?: string }) {
+    return prisma.bookCategory.update({ where: { categoryId }, data });
+  }
+
+  // Books in a deleted category keep existing, uncategorised (onDelete: SetNull).
+  async deleteCategory(categoryId: number) {
+    return prisma.bookCategory.delete({ where: { categoryId } });
+  }
+
+  // One student's loans, open ones first, for the parent portal. "overdue" is worked out from the due date.
+  async getStudentLoans(studentId: number) {
+    const loans = await prisma.bookLoan.findMany({
+      where: { studentId },
+      orderBy: [{ returnedDate: { sort: 'desc', nulls: 'first' } }, { borrowedDate: 'desc' }],
+      take: 50,
+      include: { book: { select: { titleEn: true, titleLo: true, author: true, coverUrl: true } } },
+    });
+    const now = new Date();
+    return loans.map((l) => ({
+      ...l,
+      status: !l.returnedDate && l.status !== 'lost' && l.dueDate < now ? 'overdue' : l.status,
+    }));
   }
 
   // ─── Books ─────────────────────────────────────────────
@@ -144,6 +172,17 @@ export class LibraryRepository {
       status?: string;
     }
   ) {
+    // Copies out on loan stay out: a new total moves the available count by the same amount.
+    if (data.totalCopies !== undefined) {
+      const book = await prisma.book.findUnique({ where: { bookId } });
+      if (!book) throw Object.assign(new Error('Book not found'), { statusCode: 404 });
+      const onLoan = book.totalCopies - book.availableCopies;
+      if (data.totalCopies < onLoan) {
+        throw Object.assign(new Error(`${onLoan} copies are on loan; the total cannot be lower than that`), { statusCode: 409 });
+      }
+      data.availableCopies = data.totalCopies - onLoan;
+      if (book.status !== 'archived') data.status = data.availableCopies > 0 ? 'available' : 'out_of_stock';
+    }
     return prisma.book.update({
       where: { bookId },
       data,
@@ -246,6 +285,28 @@ export class LibraryRepository {
   }
 
   // ─── Return Book ───────────────────────────────────────
+  /**
+   * Extends an open loan by `days` from today or its current due date, whichever is later
+   * (so an overdue book is renewed from today). No fines are charged. At most MAX_RENEWALS.
+   */
+  async renewLoan(loanId: number, days = 14) {
+    const loan = await prisma.bookLoan.findUnique({ where: { loanId } });
+    if (!loan) throw Object.assign(new Error('Loan record not found'), { statusCode: 404 });
+    if (loan.returnedDate || loan.status === 'returned' || loan.status === 'lost') {
+      throw Object.assign(new Error('Only a book that is still out can be renewed'), { statusCode: 409 });
+    }
+    if (loan.renewCount >= MAX_RENEWALS) {
+      throw Object.assign(new Error(`This loan has already been renewed ${MAX_RENEWALS} times`), { statusCode: 409 });
+    }
+    const today = schoolDateValue();
+    const from = loan.dueDate > today ? loan.dueDate : today;
+    return prisma.bookLoan.update({
+      where: { loanId },
+      data: { dueDate: addDays(from, days), renewCount: { increment: 1 }, status: 'borrowed' },
+      include: { book: true, student: true },
+    });
+  }
+
   async returnBook(loanId: number, notes?: string) {
     const loan = await prisma.bookLoan.findUnique({
       where: { loanId },
@@ -332,7 +393,7 @@ export class LibraryRepository {
               fullNameLo: true,
               cards: { where: { status: 'active' }, select: { cardUid: true } },
               classStudents: {
-                select: { class: { select: { nameEn: true, nameLo: true } } },
+                select: { class: { select: { classNameEn: true, classNameLo: true } } },
               },
             },
           },

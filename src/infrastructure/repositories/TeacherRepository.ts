@@ -19,9 +19,9 @@ class TeacherRepository {
   /**
    * List teachers with user info; optional search, active/inactive and gender filters.
    */
-  async findMany({ search = '', page = 1, limit = 20, status, gender }: any = {}) {
-    const skip = (page - 1) * limit;
-    const where = {
+  /** The list filters as a Prisma where — used by the list and its export. */
+  listWhere({ search = '', status, gender }: any = {}) {
+    return {
       ...(status === 'active' || status === 'inactive' ? { user: { isActive: status === 'active' } } : {}),
       ...(gender ? { gender } : {}),
       ...(search
@@ -36,6 +36,11 @@ class TeacherRepository {
           }
         : {}),
     };
+  }
+
+  async findMany({ search = '', page = 1, limit = 20, status, gender }: any = {}) {
+    const skip = (page - 1) * limit;
+    const where = this.listWhere({ search, status, gender });
 
     const [teachers, total] = await Promise.all([
       prisma.teacher.findMany({

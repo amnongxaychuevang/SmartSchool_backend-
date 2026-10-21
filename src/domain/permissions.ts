@@ -7,9 +7,12 @@
  * permission-based: their routes are scoped to the signed-in teacher/parent.
  */
 export const PERMISSION_GROUPS = {
-  overview: ['dashboard.view', 'reports.view'],
-  people: ['students.view', 'students.manage', 'teachers.view', 'teachers.manage', 'parents.view', 'parents.manage'],
-  attendance: ['cards.view', 'cards.manage', 'attendance.manage', 'attendance.manual_tap', 'leave.manage'],
+  overview: ['dashboard.view', 'reports.view', 'reports.export'],
+  people: [
+    'students.view', 'students.manage', 'students.export', 'teachers.view', 'teachers.manage', 'teachers.export', 'teachers.leave_manage',
+    'parents.view', 'parents.manage', 'parents.export',
+  ],
+  attendance: ['cards.view', 'cards.manage', 'cards.export', 'attendance.manage', 'attendance.manual_tap', 'leave.manage'],
   academics: ['academics.view', 'academics.manage', 'grades.view', 'grades.manage'],
   finance: [
     'finance.view', 'finance.topups_approve', 'finance.wallets_manage', 'finance.shops_manage',
@@ -22,7 +25,7 @@ export const PERMISSION_GROUPS = {
   transport: ['transport.view', 'transport.manage'],
   library: ['library.view', 'library.manage'],
   analytics: ['analytics.at_risk_view', 'analytics.at_risk_manage'],
-  schools: ['schools.view', 'schools.manage'],
+  assignments: ['assignments.view', 'assignments.manage'],
 } as const;
 
 export type Permission = (typeof PERMISSION_GROUPS)[keyof typeof PERMISSION_GROUPS][number];

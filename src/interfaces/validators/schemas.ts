@@ -658,6 +658,35 @@ export const behaviorRecordCreateSchema = z.object({
   notifyParent: z.boolean().optional(),
 });
 
+export const behaviorRecordUpdateSchema = behaviorRecordCreateSchema
+  .omit({ studentId: true, notifyParent: true })
+  .extend({ categoryId: z.coerce.number().int().positive().nullable().optional() })
+  .partial();
+
+// ─── Teacher leave ────────────────────────────────────────
+export const teacherLeaveCreateSchema = z.object({
+  leaveType: z.enum(['sick', 'personal', 'annual', 'maternity', 'other']),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reason: z.string().max(2000).nullable().optional(),
+});
+
+export const teacherLeaveDecisionSchema = z.object({
+  status: z.enum(['approved', 'rejected']),
+  note: z.string().max(255).nullable().optional(),
+});
+
+// ─── Homework / Assignments ───────────────────────────────
+export const assignmentCreateSchema = z.object({
+  classId: z.coerce.number().int().positive(),
+  subjectId: z.coerce.number().int().positive().nullable().optional(),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(5000).nullable().optional(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const assignmentUpdateSchema = assignmentCreateSchema.partial();
+
 // ─── 15. Bus Transportation ───────────────────────────────
 export const busVehicleSchema = z.object({
   plateNumber: z.string().min(1).max(30),
@@ -731,20 +760,4 @@ export const riskInterventionSchema = z.object({
   status: z.enum(['pending', 'in_progress', 'resolved']).optional(),
   notes: z.string().optional(),
 });
-
-// ─── 19. Schools ──────────────────────────────────────────
-export const schoolCreateSchema = z.object({
-  schoolCode: z.string().min(1).max(50),
-  nameEn: z.string().min(1).max(150),
-  nameLo: z.string().min(1).max(150),
-  phone: z.string().max(50).optional(),
-  email: z.string().email().optional(),
-  addressEn: z.string().optional(),
-  addressLo: z.string().optional(),
-  logoUrl: z.string().max(255).optional(),
-  plan: z.enum(['trial', 'standard', 'enterprise']).optional(),
-  maxStudents: z.coerce.number().int().positive().optional(),
-});
-
-export const schoolUpdateSchema = schoolCreateSchema.partial();
 

@@ -76,6 +76,7 @@ model User {
   notifications         Notification[]      @relation("NotificationRecipient")
   spendingLimits        SpendingLimit[]     @relation("SpendingLimitSetter")
   requestedLeaves       LeaveRequest[]      @relation("ParentLeaveRequester")
+  decidedTeacherLeaves  TeacherLeave[]      @relation("TeacherLeaveDecider")
   approvedLeaves        LeaveRequest[]      @relation("LeaveApprover")
   createdAnnouncements  Announcement[]      @relation("AnnouncementCreator")
   createdEvents         SchoolEvent[]       @relation("SchoolEventCreator")
@@ -148,6 +149,7 @@ enum AuditAction {
   approve
   reject
   status_change
+  export
 }
 
 // Append-only record of who did what to which record, for accountability on
@@ -197,6 +199,7 @@ model Teacher {
   province  Province?         @relation(fields: [provinceId], references: [provinceId], onDelete: SetNull)
   district  District?         @relation(fields: [districtId], references: [districtId], onDelete: SetNull)
   documents TeacherDocument[]
+  leaves    TeacherLeave[]
 
   // Back-relations of the "teacher must be a Teacher" constraints (see Class/Subject/Grade/Schedule).
   homeroomClasses Class[]        @relation("ClassHomeroomTeacher")
@@ -845,6 +848,36 @@ enum LeaveStatus {
   rejected
 }
 
+enum TeacherLeaveType {
+  sick
+  personal
+  annual
+  maternity
+  other
+}
+
+// A teacher's own leave request, decided by staff with teachers.leave_manage.
+model TeacherLeave {
+  leaveId       Int              @id @default(autoincrement()) @map("leave_id")
+  teacherUserId Int              @map("teacher_user_id")
+  leaveType     TeacherLeaveType @default(personal) @map("leave_type")
+  startDate     DateTime         @map("start_date") @db.Date
+  endDate       DateTime         @map("end_date") @db.Date
+  reason        String?          @db.Text
+  status        LeaveStatus      @default(pending)
+  decidedBy     Int?             @map("decided_by")
+  decisionNote  String?          @map("decision_note") @db.VarChar(255)
+  requestedAt   DateTime         @default(now()) @map("requested_at")
+  decidedAt     DateTime?        @map("decided_at")
+
+  teacher Teacher @relation(fields: [teacherUserId], references: [userId], onDelete: Cascade)
+  decider User?   @relation("TeacherLeaveDecider", fields: [decidedBy], references: [userId], onDelete: SetNull)
+
+  @@index([teacherUserId, startDate])
+  @@index([status])
+  @@map("teacher_leaves")
+}
+
 model LeaveRequest {
   leaveId      Int         @id @default(autoincrement()) @map("leave_id")
   studentId    Int         @map("student_id")
@@ -1220,6 +1253,7 @@ model BookLoan {
   borrowedDate DateTime  @default(now()) @map("borrowed_date")
   dueDate      DateTime  @map("due_date") @db.Date
   returnedDate DateTime? @map("returned_date")
+  renewCount   Int       @default(0) @map("renew_count")
   status       String    @default("borrowed") @db.VarChar(30) // borrowed, returned, overdue, lost
   processedBy  Int?      @map("processed_by")
   notes        String?   @db.VarChar(255)
@@ -1270,25 +1304,3 @@ model RiskIntervention {
   @@index([studentId, status])
   @@map("risk_interventions")
 }
-
-// ─── 19. Multi-School / SaaS (ລະບົບຫຼາຍໂຮງຮຽນ) ───────────────
-model School {
-  schoolId    Int       @id @default(autoincrement()) @map("school_id")
-  schoolCode  String    @unique @map("school_code") @db.VarChar(50)
-  nameEn      String    @map("name_en") @db.VarChar(150)
-  nameLo      String    @map("name_lo") @db.VarChar(150)
-  phone       String?   @db.VarChar(50)
-  email       String?   @db.VarChar(150)
-  addressEn   String?   @map("address_en") @db.Text
-  addressLo   String?   @map("address_lo") @db.Text
-  logoUrl     String?   @map("logo_url") @db.VarChar(255)
-  plan        String    @default("standard") @db.VarChar(50)
-  status      String    @default("active") @db.VarChar(30)
-  maxStudents Int       @default(500) @map("max_students")
-  settings    Json?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime? @updatedAt @map("updated_at")
-
-  @@map("schools")
-}
-

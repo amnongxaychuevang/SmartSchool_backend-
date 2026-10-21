@@ -101,6 +101,14 @@ const FeeController = {
     res.json({ success: true, data: await feeRepository.report(academicYear) });
   },
 
+  async reportPayments(req, res) {
+    const academicYear = typeof req.query.academicYear === 'string' ? req.query.academicYear : await getCurrentAcademicYear();
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 15));
+    const result = await feeRepository.reportPayments(academicYear, page, limit);
+    res.json({ success: true, data: result.data, meta: result.meta });
+  },
+
   // ── Parent: a child's invoices ──
   async childInvoices(req, res) {
     const studentId = Number(req.params.studentId);

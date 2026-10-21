@@ -7,9 +7,10 @@ const kip = (n: number) => n.toLocaleString('en-US');
 class WalletAdminController {
   async listWallets(req, res, next) {
     try {
-      const { search = '', page = 1, limit = 20 } = req.query;
+      const { search = '', status, page = 1, limit = 20 } = req.query;
       const result = await walletRepository.findAll({
         search,
+        status,
         page: parseInt(page),
         limit: parseInt(limit),
       });
