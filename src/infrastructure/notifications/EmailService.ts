@@ -28,6 +28,10 @@ async function getEmailConfig(): Promise<EmailConfig | null> {
 }
 
 class EmailService {
+  async isConfigured(): Promise<boolean> {
+    return (await getEmailConfig()) !== null;
+  }
+
   async sendMail({
     to,
     subject,

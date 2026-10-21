@@ -10,6 +10,7 @@ import expressRouter from './infrastructure/web/ExpressRouter';
 import SocketManager from './infrastructure/websocket/SocketManager';
 import ErrorHandler from './interfaces/middlewares/ErrorHandler';
 import { UPLOAD_ROOT, UPLOAD_URL_PREFIX } from './infrastructure/storage/PhotoStorage';
+import { startAutoAbsenceJob } from './infrastructure/jobs/AutoAbsenceJob';
 
 const app = express();
 const server = http.createServer(app);
@@ -60,3 +61,5 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+startAutoAbsenceJob();

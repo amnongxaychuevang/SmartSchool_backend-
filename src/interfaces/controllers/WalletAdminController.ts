@@ -1,5 +1,8 @@
 import walletRepository from '../../infrastructure/repositories/WalletRepository';
 import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
+import dispatcher from '../../infrastructure/notifications/NotificationDispatcher';
+
+const kip = (n: number) => n.toLocaleString('en-US');
 
 class WalletAdminController {
   async listWallets(req, res, next) {
@@ -69,6 +72,35 @@ class WalletAdminController {
       });
 
       res.json({ success: true, data: { transaction } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /wallet-transactions/:transactionId/refund — undo a wrong or cancelled shop purchase.
+  async refund(req, res, next) {
+    try {
+      const transactionId = parseInt(req.params.transactionId);
+      const { reason } = req.body;
+      const { refund, studentId, balanceAfter } = await walletRepository.refundPurchase(transactionId, req.user.userId, reason);
+
+      auditLogRepository.log({
+        userId: req.user.userId,
+        action: 'create',
+        entityType: 'wallet_refund',
+        entityId: transactionId,
+        detail: { refundTransactionId: refund.transactionId, amount: Number(refund.amount), reason },
+        ipAddress: req.ip,
+      });
+
+      dispatcher.notifyParents(
+        studentId,
+        'transaction',
+        `Refund of ${kip(Number(refund.amount))} LAK: ${reason}. Balance: ${kip(balanceAfter)} LAK.`,
+        `ຄືນເງິນ ${kip(Number(refund.amount))} ກີບ: ${reason}. ຍອດເຫຼືອ: ${kip(balanceAfter)} ກີບ.`,
+      ).catch((err) => console.error('Failed to notify parents of refund:', err));
+
+      res.status(201).json({ success: true, data: { transaction: refund } });
     } catch (error) {
       next(error);
     }

@@ -39,6 +39,7 @@ class ReportController {
         by: ['shopId'],
         where: {
           transactionType: 'purchase',
+          refund: { is: null }, // refunded sales were given back
           shopId: { not: null },
           createdAt: { gte: dateFrom, lte: dateTo },
         },

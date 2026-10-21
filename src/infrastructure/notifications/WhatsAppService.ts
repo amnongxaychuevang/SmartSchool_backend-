@@ -14,10 +14,15 @@ async function getWhatsAppConfig(): Promise<WhatsAppConfig | null> {
 }
 
 class WhatsAppService {
+  async isConfigured(): Promise<boolean> {
+    return (await getWhatsAppConfig()) !== null;
+  }
+
   async sendTextMessage(recipientPhone: string, text: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const config = await getWhatsAppConfig();
     if (!config) {
-      console.warn('[WhatsApp] Not configured — message skipped:', text);
+      // The text can hold a password reset code: only echo it on a dev machine.
+      console.warn('[WhatsApp] Not configured — message skipped:', process.env.NODE_ENV === 'production' ? '' : text);
       return { success: false, error: 'WhatsApp not configured' };
     }
 

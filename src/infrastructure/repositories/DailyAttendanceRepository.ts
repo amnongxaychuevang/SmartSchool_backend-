@@ -10,7 +10,8 @@ export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 class DailyAttendanceRepository {
   /**
    * First gate tap of the day → present/late. Never overrides a status a teacher
-   * set or an approved leave; it only fills in the check-in time.
+   * set or an approved leave; it only fills in the check-in time. An "auto"
+   * absence (no tap by the cut-off) is replaced: the student did come, late.
    */
   async recordCheckIn(studentId: number, time: Date) {
     const date = schoolDateValue(time);
@@ -29,6 +30,12 @@ class DailyAttendanceRepository {
         if ((err as { code?: string }).code !== 'P2002') throw err;
         return prisma.dailyAttendance.findUnique({ where: { studentId_date: { studentId, date } } });
       }
+    }
+    if (existing.source === 'auto') {
+      return prisma.dailyAttendance.update({
+        where: { id: existing.id },
+        data: { status, source: 'card', firstCheckIn: existing.firstCheckIn ?? time },
+      });
     }
     if (!existing.firstCheckIn) {
       return prisma.dailyAttendance.update({ where: { id: existing.id }, data: { firstCheckIn: time } });

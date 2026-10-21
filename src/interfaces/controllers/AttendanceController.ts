@@ -3,6 +3,8 @@ import cardRepository from '../../infrastructure/repositories/CardRepository';
 import attendanceRepository from '../../infrastructure/repositories/AttendanceRepository';
 import dailyAttendanceRepository from '../../infrastructure/repositories/DailyAttendanceRepository';
 import { teacherHasClass } from '../../infrastructure/repositories/AcademicYear';
+import MarkAutoAbsences from '../../application/use-cases/attendance/MarkAutoAbsences';
+import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
 
 // Teachers may only read/mark attendance for their own classes.
 const assertTeacherClass = async (user, classId: number) => {
@@ -17,7 +19,26 @@ const scanCardUseCase = new ScanCard(
   dailyAttendanceRepository
 );
 
+const markAutoAbsences = new MarkAutoAbsences();
+
 class AttendanceController {
+  // POST /attendance/auto-absence/run — run today's auto-absence marking now, without waiting for the cut-off.
+  async runAutoAbsence(req, res, next) {
+    try {
+      const result = await markAutoAbsences.execute();
+      auditLogRepository.log({
+        userId: req.user.userId,
+        action: 'create',
+        entityType: 'auto_absence',
+        detail: result,
+        ipAddress: req.ip,
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async scanCard(req, res, next) {
     try {
       const { cardUid, gateLocation } = req.body;

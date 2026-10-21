@@ -2,6 +2,7 @@ import CreateParentUseCase from '../../application/use-cases/parents/CreateParen
 import UpdateParentUseCase from '../../application/use-cases/parents/UpdateParentUseCase';
 import parentRepository from '../../infrastructure/repositories/ParentRepository';
 import settingsRepository from '../../infrastructure/repositories/SettingsRepository';
+import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
 import { savePhoto, removePhoto } from '../../infrastructure/storage/PhotoStorage';
 
 const createParentUseCase = new CreateParentUseCase(parentRepository);
@@ -139,6 +140,33 @@ class ParentController {
       const { studentId } = req.params;
       const wallet = await parentRepository.findChildWallet(studentId, parentUserId);
       res.json({ success: true, data: wallet });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getChildCards(req, res, next) {
+    try {
+      const cards = await parentRepository.getChildCards(req.params.studentId, req.user.userId);
+      res.json({ success: true, data: cards });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async reportCardLost(req, res, next) {
+    try {
+      const { studentId, cardId } = req.params;
+      const card = await parentRepository.reportCardLost(studentId, cardId, req.user.userId);
+      auditLogRepository.log({
+        userId: req.user.userId,
+        action: 'status_change',
+        entityType: 'card',
+        entityId: card.cardId,
+        detail: { status: 'lost', reportedBy: 'parent', studentId: Number(studentId) },
+        ipAddress: req.ip,
+      });
+      res.json({ success: true, data: card });
     } catch (error) {
       next(error);
     }

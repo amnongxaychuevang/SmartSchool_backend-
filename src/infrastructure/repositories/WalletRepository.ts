@@ -1,6 +1,8 @@
 import prisma from '../database/PrismaClient';
 import Wallet from '../../domain/entities/Wallet';
 
+const fail = (message: string, statusCode: number) => Object.assign(new Error(message), { statusCode });
+
 class WalletRepository {
   async findAll({ search = '', page = 1, limit = 20 }: any = {}) {
     const skip = (page - 1) * limit;
@@ -59,6 +61,7 @@ class WalletRepository {
         include: {
           shop: { select: { shopId: true, shopNameEn: true, shopNameLo: true } },
           processor: { select: { userId: true, fullNameEn: true, fullNameLo: true } },
+          refund: { select: { transactionId: true, createdAt: true } },
         },
       }),
       prisma.walletTransaction.count({ where }),
@@ -95,6 +98,56 @@ class WalletRepository {
         },
       });
     });
+  }
+
+  /**
+   * Reverses a shop purchase: the amount goes back to the wallet as a "refund"
+   * transaction that points at the purchase. refund_of_id is unique, so a
+   * purchase is refunded at most once, even if two people click at the same time.
+   * Works on a frozen wallet too: money going back to the student is always allowed.
+   */
+  async refundPurchase(transactionId: number, processedBy: number, reason: string) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const purchase = await tx.walletTransaction.findUnique({
+          where: { transactionId },
+          include: { refund: { select: { transactionId: true } }, wallet: { select: { studentId: true } } },
+        });
+        if (!purchase) throw fail('Transaction not found', 404);
+        if (purchase.transactionType !== 'purchase') throw fail('Only purchases can be refunded', 422);
+        if (purchase.refund) throw fail('This purchase was already refunded', 409);
+
+        // increment (not "set") so a purchase landing at the same moment can't be lost;
+        // that purchase's balance guard fails instead and the cashier retries.
+        const wallet = await tx.walletAccount.update({
+          where: { walletId: purchase.walletId },
+          data: { balance: { increment: purchase.amount } },
+        });
+        const amount = Number(purchase.amount);
+        const balanceAfter = Number(wallet.balance);
+        const ref = purchase.referenceNo ?? `#${transactionId}`;
+
+        const refund = await tx.walletTransaction.create({
+          data: {
+            walletId: purchase.walletId,
+            shopId: purchase.shopId,
+            transactionType: 'refund',
+            amount,
+            balanceBefore: balanceAfter - amount,
+            balanceAfter,
+            descriptionEn: `Refund of ${ref}: ${reason}`.slice(0, 255),
+            descriptionLo: `ຄືນເງິນ ${ref}: ${reason}`.slice(0, 255),
+            referenceNo: `RF-${transactionId}`,
+            processedBy,
+            refundOfId: transactionId,
+          },
+        });
+        return { refund, studentId: purchase.wallet.studentId, balanceAfter };
+      });
+    } catch (err) {
+      if ((err as { code?: string }).code === 'P2002') throw fail('This purchase was already refunded', 409);
+      throw err;
+    }
   }
 
   async updateStatus(walletId, status) {
@@ -157,13 +210,15 @@ class WalletRepository {
 
   /**
    * Sum of 'purchase' transactions on a wallet since a given point in time.
-   * Used to enforce daily/weekly spending limits.
+   * Used to enforce daily/weekly spending limits. A refunded purchase was
+   * given back, so it no longer counts against the limit.
    */
   async getSpentSince(walletId, since) {
     const result = await prisma.walletTransaction.aggregate({
       where: {
         walletId: parseInt(walletId),
         transactionType: 'purchase',
+        refund: { is: null },
         createdAt: { gte: since },
       },
       _sum: { amount: true },

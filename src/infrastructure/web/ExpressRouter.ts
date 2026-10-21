@@ -31,6 +31,7 @@ import classSubjectController from '../../interfaces/controllers/ClassSubjectCon
 import auditLogController from '../../interfaces/controllers/AuditLogController';
 import reportController from '../../interfaces/controllers/ReportController';
 import feeController from '../../interfaces/controllers/FeeController';
+import promotionController from '../../interfaces/controllers/PromotionController';
 
 // Middlewares
 import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
@@ -40,6 +41,8 @@ import uploadPdf from '../../interfaces/middlewares/uploadPdf';
 import { saveSlip, savePaymentQr } from '../../infrastructure/storage/PhotoStorage';
 import {
   loginSchema, refreshTokenSchema, logoutSchema, attendanceScanSchema,
+  changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, walletRefundSchema,
+  promotionPreviewSchema, promotionApplySchema,
   dailyAttendanceQuerySchema, dailyAttendanceSaveSchema, attendanceReportQuerySchema, absenceNotifySchema,
   walletProcessSchema, walletTopUpSchema, walletStatusUpdateSchema,
   topUpCreateSchema, topUpRejectSchema,
@@ -82,6 +85,14 @@ const scanLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many attempts, please try again later' },
+});
+
 // Health check
 router.get('/health', (req, res) => {
   res.json({ success: true, message: 'API routes are working' });
@@ -95,6 +106,10 @@ router.get('/auth/me', AuthMiddleware.verifyToken, authController.me);
 // just expired when a client needs to call this).
 router.post('/auth/refresh', loginLimiter, validate(refreshTokenSchema), authController.refresh);
 router.post('/auth/logout', validate(logoutSchema), authController.logout);
+router.post('/auth/change-password', AuthMiddleware.verifyToken, loginLimiter, validate(changePasswordSchema), authController.changePassword);
+// Forgotten password: every request counts (the answer is always "ok", so skipSuccessfulRequests would not limit it).
+router.post('/auth/forgot-password', resetLimiter, validate(forgotPasswordSchema), authController.forgotPassword);
+router.post('/auth/reset-password', resetLimiter, validate(resetPasswordSchema), authController.resetPassword);
 
 // ─── Dashboard (Admin) ──────────────────────────────────
 router.get('/dashboard/stats', AuthMiddleware.verifyToken, AuthMiddleware.authorize('dashboard.view'), dashboardController.stats);
@@ -167,6 +182,8 @@ router.get('/parents/me/children/:studentId/leave-requests', AuthMiddleware.veri
 router.post('/parents/me/children/:studentId/leave-requests', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), validate(leaveRequestCreateSchema), parentController.createLeaveRequest);
 router.get('/parents/me/children/:studentId/spending-limits', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getSpendingLimits);
 router.put('/parents/me/children/:studentId/spending-limits', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), validate(spendingLimitUpsertSchema), parentController.updateSpendingLimits);
+router.get('/parents/me/children/:studentId/cards', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildCards);
+router.post('/parents/me/children/:studentId/cards/:cardId/report-lost', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.reportCardLost);
 
 // ─── Classes (Admin/Teacher) ────────────────────────────
 router.get('/classes', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view', ['teacher']), classController.list);
@@ -176,6 +193,11 @@ router.get('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize(
 router.post('/classes', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(classCreateSchema), classController.create);
 router.put('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(classUpdateSchema), classController.update);
 router.delete('/classes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), classController.delete);
+
+// ─── Year-end promotion ─────────────────────────────────
+// Moves students between years and changes their status: both class and student rights are needed.
+router.get('/promotion/preview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), validate(promotionPreviewSchema, 'query'), promotionController.preview);
+router.post('/promotion/apply', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.manage'), AuthMiddleware.authorize('students.manage'), validate(promotionApplySchema), promotionController.apply);
 
 // ─── Schedules (Teacher) ────────────────────────────────
 router.get('/schedules', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view', ['teacher']), scheduleController.list);
@@ -195,6 +217,7 @@ router.post('/attendance/scan', scanLimiter, AuthMiddleware.verifyDeviceKey, val
 router.post('/attendance/scan/manual', scanLimiter, AuthMiddleware.verifyToken, AuthMiddleware.authorize('attendance.manual_tap'), validate(attendanceScanSchema), attendanceController.scanCard);
 router.get('/attendance/daily', AuthMiddleware.verifyToken, AuthMiddleware.authorize('attendance.manage', ['teacher']), validate(dailyAttendanceQuerySchema, 'query'), attendanceController.listDaily);
 router.put('/attendance/daily', AuthMiddleware.verifyToken, AuthMiddleware.authorize('attendance.manage', ['teacher']), validate(dailyAttendanceSaveSchema), attendanceController.saveDaily);
+router.post('/attendance/auto-absence/run', AuthMiddleware.verifyToken, AuthMiddleware.authorize('attendance.manage'), attendanceController.runAutoAbsence);
 
 // ─── Wallet (shop purchase) ─────────────────────────────
 router.get('/wallet/card/:uid', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.pos'), walletController.lookupCard);
@@ -206,6 +229,7 @@ router.get('/wallets/student/:studentId', AuthMiddleware.verifyToken, AuthMiddle
 router.get('/wallets/:walletId/transactions', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.view'), walletAdminController.listTransactions);
 router.post('/wallets/:walletId/topup', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.wallets_manage'), validate(walletTopUpSchema), walletAdminController.topUp);
 router.put('/wallets/:walletId/status', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.wallets_manage'), validate(walletStatusUpdateSchema), walletAdminController.updateStatus);
+router.post('/wallet-transactions/:transactionId/refund', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.wallets_manage'), validate(walletRefundSchema), walletAdminController.refund);
 
 // ─── Subjects (Admin/Teacher) ───────────────────────────
 router.get('/subjects', AuthMiddleware.verifyToken, AuthMiddleware.authorize('academics.view', ['teacher']), subjectController.list);

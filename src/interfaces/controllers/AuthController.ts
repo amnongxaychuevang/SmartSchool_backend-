@@ -5,6 +5,11 @@ import UserRepository from '../../infrastructure/repositories/UserRepository';
 import refreshTokenRepository from '../../infrastructure/repositories/RefreshTokenRepository';
 import auditLogRepository from '../../infrastructure/repositories/AuditLogRepository';
 import roleRepository from '../../infrastructure/repositories/RoleRepository';
+import ChangePasswordUseCase from '../../application/use-cases/auth/ChangePasswordUseCase';
+import PasswordResetUseCase from '../../application/use-cases/auth/PasswordResetUseCase';
+import passwordResetRepository from '../../infrastructure/repositories/PasswordResetRepository';
+import whatsAppService from '../../infrastructure/notifications/WhatsAppService';
+import emailService from '../../infrastructure/notifications/EmailService';
 
 // The client needs to know which portal the user belongs to and what they may do
 // there (to route them and to show only the menus they can use). The server still
@@ -25,6 +30,20 @@ const userRepository = new UserRepository();
 const loginUseCase = new LoginUseCase(userRepository, refreshTokenRepository);
 const getMeUseCase = new GetMeUseCase(userRepository);
 const refreshTokenUseCase = new RefreshTokenUseCase(userRepository, refreshTokenRepository);
+const changePasswordUseCase = new ChangePasswordUseCase(userRepository);
+// On a dev machine the reset flow works without WhatsApp/email: the code is
+// echoed to the server console instead (never in production).
+const devEcho = process.env.NODE_ENV !== 'production';
+const passwordResetUseCase = new PasswordResetUseCase(userRepository, passwordResetRepository, refreshTokenRepository, {
+  isAvailable: async (channel) =>
+    devEcho || (channel === 'email' ? emailService.isConfigured() : whatsAppService.isConfigured()),
+  whatsApp: (phone, text) => whatsAppService.sendTextMessage(phone, text),
+  email: async (to, subject, text) => {
+    const result = await emailService.sendMail({ to, subject, text });
+    if (!result.success && devEcho) console.warn('[Email] Not sent (dev):', text);
+    return result;
+  },
+});
 
 class AuthController {
   async login(req, res, next) {
@@ -87,6 +106,53 @@ class AuthController {
       if (error.message === 'Invalid or expired refresh token' || error.message === 'Account is inactive') {
         return res.status(401).json({ success: false, message: error.message });
       }
+      next(error);
+    }
+  }
+
+  // POST /auth/change-password — the signed-in user sets a new password.
+  async changePassword(req, res, next) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      await changePasswordUseCase.execute(req.user.userId, currentPassword, newPassword);
+      auditLogRepository.log({
+        userId: req.user.userId,
+        action: 'update',
+        entityType: 'user_password',
+        entityId: req.user.userId,
+        ipAddress: req.ip,
+      });
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /auth/forgot-password — sends a reset code; same answer whether or not the account exists.
+  async forgotPassword(req, res, next) {
+    try {
+      await passwordResetUseCase.request(req.body.identifier);
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // POST /auth/reset-password — code + new password; signs the account out everywhere.
+  async resetPassword(req, res, next) {
+    try {
+      const { identifier, code, newPassword } = req.body;
+      const { userId } = await passwordResetUseCase.confirm(identifier, code, newPassword);
+      auditLogRepository.log({
+        userId,
+        action: 'update',
+        entityType: 'user_password',
+        entityId: userId,
+        detail: { via: 'reset_code' },
+        ipAddress: req.ip,
+      });
+      res.json({ success: true });
+    } catch (error) {
       next(error);
     }
   }

@@ -2,6 +2,7 @@ import prisma from '../database/PrismaClient';
 import { currentEnrolmentWhere } from './AcademicYear';
 import { scheduleInclude, flattenSchedule } from './ScheduleRepository';
 import { ADDRESS_INCLUDE, checkAddress } from './Address';
+import { schoolDateString } from '../../domain/schoolTime';
 
 // Never select the whole user row: it holds the password hash.
 const USER_SELECT = {
@@ -182,7 +183,10 @@ class ParentRepository {
         transactions: {
           orderBy: { createdAt: 'desc' },
           take: 20,
-          include: { shop: { select: { shopId: true, shopNameEn: true, shopNameLo: true } } },
+          include: {
+            shop: { select: { shopId: true, shopNameEn: true, shopNameLo: true } },
+            refund: { select: { transactionId: true, createdAt: true } },
+          },
         }
       }
     });
@@ -302,6 +306,43 @@ class ParentRepository {
         alertThreshold: data.alertThreshold ? parseFloat(data.alertThreshold) : null,
         setBy: parseInt(parentUserId)
       }
+    });
+  }
+
+  // The child's cards, newest first — so a parent can see which one to report lost.
+  async getChildCards(studentId, parentUserId) {
+    const link = await prisma.parentStudent.findUnique({
+      where: { uq_parent_student: { parentUserId: parseInt(parentUserId), studentId: parseInt(studentId) } }
+    });
+    if (!link) throw Object.assign(new Error('Unauthorized or not your child'), { statusCode: 403 });
+
+    return prisma.card.findMany({
+      where: { studentId: parseInt(studentId) },
+      orderBy: { issuedDate: 'desc' },
+      select: { cardId: true, cardUid: true, status: true, issuedDate: true, expiredDate: true, notes: true },
+    });
+  }
+
+  /**
+   * A parent blocks a lost card at once, so nobody can spend the wallet with it
+   * or tap in with it. Only the school can issue a new card or re-activate one.
+   */
+  async reportCardLost(studentId, cardId, parentUserId) {
+    const link = await prisma.parentStudent.findUnique({
+      where: { uq_parent_student: { parentUserId: parseInt(parentUserId), studentId: parseInt(studentId) } }
+    });
+    if (!link) throw Object.assign(new Error('Unauthorized or not your child'), { statusCode: 403 });
+
+    const card = await prisma.card.findFirst({ where: { cardId: parseInt(cardId), studentId: parseInt(studentId) } });
+    if (!card) throw Object.assign(new Error('Card not found'), { statusCode: 404 });
+    if (card.status !== 'active') throw Object.assign(new Error(`Card is already ${card.status}`), { statusCode: 409 });
+
+    // Keep the school's own note; add the report after it.
+    const report = `Reported lost by parent on ${schoolDateString(new Date())}`;
+    return prisma.card.update({
+      where: { cardId: card.cardId },
+      data: { status: 'lost', notes: (card.notes ? `${card.notes} · ${report}` : report).slice(0, 255) },
+      select: { cardId: true, cardUid: true, status: true, issuedDate: true, expiredDate: true, notes: true },
     });
   }
 }

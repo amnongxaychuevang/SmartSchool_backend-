@@ -61,6 +61,20 @@ CREATE TABLE `refresh_tokens` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `password_reset_codes` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `code_hash` VARCHAR(255) NOT NULL,
+    `expires_at` DATETIME(3) NOT NULL,
+    `attempts` INTEGER NOT NULL DEFAULT 0,
+    `used_at` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `password_reset_codes_user_id_created_at_idx`(`user_id`, `created_at`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `audit_logs` (
     `audit_id` INTEGER NOT NULL AUTO_INCREMENT,
     `user_id` INTEGER NULL,
@@ -130,7 +144,6 @@ CREATE TABLE `classes` (
     `grade_level_lo` VARCHAR(20) NULL,
     `homeroom_teacher_id` INTEGER NULL,
     `academic_year` VARCHAR(9) NOT NULL,
-    `is_active` BOOLEAN NOT NULL DEFAULT true,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `classes_academic_year_idx`(`academic_year`),
@@ -287,7 +300,7 @@ CREATE TABLE `daily_attendance` (
     `student_id` INTEGER NOT NULL,
     `date` DATE NOT NULL,
     `status` ENUM('present', 'absent', 'late', 'excused') NOT NULL,
-    `source` ENUM('card', 'teacher', 'leave') NOT NULL,
+    `source` ENUM('card', 'auto', 'teacher', 'leave') NOT NULL,
     `first_check_in` DATETIME(3) NULL,
     `note` VARCHAR(255) NULL,
     `recorded_by` INTEGER NULL,
@@ -402,9 +415,11 @@ CREATE TABLE `wallet_transactions` (
     `description_lo` VARCHAR(255) NULL,
     `reference_no` VARCHAR(50) NULL,
     `processed_by` INTEGER NULL,
+    `refund_of_id` INTEGER NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     UNIQUE INDEX `wallet_transactions_reference_no_key`(`reference_no`),
+    UNIQUE INDEX `wallet_transactions_refund_of_id_key`(`refund_of_id`),
     INDEX `wallet_transactions_wallet_id_created_at_idx`(`wallet_id`, `created_at`),
     INDEX `wallet_transactions_transaction_type_idx`(`transaction_type`),
     PRIMARY KEY (`transaction_id`)
@@ -439,7 +454,7 @@ CREATE TABLE `notifications` (
     `recipient_user_id` INTEGER NOT NULL,
     `student_id` INTEGER NULL,
     `type` ENUM('check_in', 'check_out', 'absence', 'grade', 'transaction', 'general') NOT NULL,
-    `channel` ENUM('sms', 'line', 'telegram', 'app_push', 'email') NOT NULL,
+    `channel` ENUM('whatsapp', 'app_push', 'email') NOT NULL,
     `message_en` TEXT NOT NULL,
     `message_lo` TEXT NOT NULL,
     `sent_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -644,6 +659,9 @@ ALTER TABLE `users` ADD CONSTRAINT `users_role_id_fkey` FOREIGN KEY (`role_id`) 
 ALTER TABLE `refresh_tokens` ADD CONSTRAINT `refresh_tokens_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `password_reset_codes` ADD CONSTRAINT `password_reset_codes_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `audit_logs` ADD CONSTRAINT `audit_logs_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -762,6 +780,9 @@ ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_shop_id_fk
 
 -- AddForeignKey
 ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_processed_by_fkey` FOREIGN KEY (`processed_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `wallet_transactions` ADD CONSTRAINT `wallet_transactions_refund_of_id_fkey` FOREIGN KEY (`refund_of_id`) REFERENCES `wallet_transactions`(`transaction_id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- AddForeignKey
 ALTER TABLE `top_up_requests` ADD CONSTRAINT `top_up_requests_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;

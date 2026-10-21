@@ -186,6 +186,20 @@ export const userCreateSchema = z
   .refine(hasLoginIdentifier, loginIdentifierError);
 export const userUpdateSchema = z.object(userBase).partial();
 
+// ─── Own password ───────────────────────────────────────
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(100),
+  newPassword: z.string().min(6).max(100),
+});
+export const forgotPasswordSchema = z.object({
+  identifier: z.string().trim().min(3).max(150),
+});
+export const resetPasswordSchema = z.object({
+  identifier: z.string().trim().min(3).max(150),
+  code: z.string().regex(/^\d{6}$/, "The code has 6 digits"),
+  newPassword: z.string().min(6).max(100),
+});
+
 // Opens a login for an existing teacher record (their phone/email is the login name).
 export const teacherAccountSchema = z.object({
   teacherId: z.coerce.number().int().positive(),
@@ -270,6 +284,23 @@ const academicYear = z
     (y) => Number(y.slice(5)) === Number(y.slice(0, 4)) + 1,
     "The academic year must be two consecutive years",
   );
+
+// ─── Year-end promotion ─────────────────────────────────
+export const promotionPreviewSchema = z.object({ fromYear: academicYear, toYear: academicYear });
+export const promotionApplySchema = z.object({
+  fromYear: academicYear,
+  toYear: academicYear,
+  moves: z
+    .array(
+      z.discriminatedUnion("action", [
+        z.object({ studentId: z.number().int().positive(), action: z.literal("move"), toClassId: z.number().int().positive() }),
+        z.object({ studentId: z.number().int().positive(), action: z.literal("graduate") }),
+        z.object({ studentId: z.number().int().positive(), action: z.literal("transfer") }),
+      ]),
+    )
+    .min(1)
+    .max(5000),
+});
 
 const classBase = {
   classNameEn: z.string().trim().min(1).max(50),
@@ -361,6 +392,9 @@ export const cardCreateSchema = z.object({
   studentId: z.coerce.number().int().positive(),
   expiredDate: z.coerce.date().optional(),
   notes: z.string().max(255).optional(),
+});
+export const walletRefundSchema = z.object({
+  reason: z.string().trim().min(3).max(150),
 });
 export const cardUpdateSchema = z.object({
   status: z.enum(["active", "lost", "deactivated"]).optional(),
@@ -489,6 +523,14 @@ export const settingsSaveSchema = z
     notificationChannel: z
       .object({
         default: z.enum(["whatsapp", "email"]),
+      })
+      .optional(),
+    autoAbsence: z
+      .object({
+        enabled: z.boolean(),
+        cutoffTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM"),
+        schoolDays: z.array(z.number().int().min(0).max(6)).max(7),
+        notifyParents: z.boolean(),
       })
       .optional(),
     // The school account parents transfer top-ups to (shown in the parent portal).

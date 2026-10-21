@@ -82,6 +82,7 @@ model User {
   parent                Parent?
   refreshTokens         RefreshToken[]      @relation("UserRefreshTokens")
   auditLogs             AuditLog[]          @relation("AuditLogUser")
+  passwordResetCodes    PasswordResetCode[]
 
   recordedAttendance DailyAttendance[] @relation("DailyAttendanceRecorder")
 
@@ -112,6 +113,23 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+// One-time code sent to a user's phone (WhatsApp) or email to reset a forgotten
+// password. Only a hash is stored; a code expires quickly and allows few attempts.
+model PasswordResetCode {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  codeHash  String    @map("code_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  attempts  Int       @default(0)
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("password_reset_codes")
 }
 
 enum AuditAction {
@@ -148,26 +166,26 @@ model AuditLog {
 }
 
 model Teacher {
-  teacherId      Int       @id @default(autoincrement()) @map("teacher_id")
-  userId         Int       @unique @map("user_id")
-  employeeCode   String    @unique @map("employee_code") @db.VarChar(20)
-  gender         GenderEnum?
-  specialization String?   @db.VarChar(100)
-  qualification  String?   @map("qualification") @db.VarChar(150)
-  hireDate       DateTime? @map("hire_date") @db.Date
-  salary         Decimal?  @db.Decimal(12, 2)
+  teacherId         Int         @id @default(autoincrement()) @map("teacher_id")
+  userId            Int         @unique @map("user_id")
+  employeeCode      String      @unique @map("employee_code") @db.VarChar(20)
+  gender            GenderEnum?
+  specialization    String?     @db.VarChar(100)
+  qualification     String?     @map("qualification") @db.VarChar(150)
+  hireDate          DateTime?   @map("hire_date") @db.Date
+  salary            Decimal?    @db.Decimal(12, 2)
   // Bank account the salary is transferred to. Sensitive: only returned on the single-teacher API.
-  bankName          String? @map("bank_name") @db.VarChar(100)
-  bankAccountName   String? @map("bank_account_name") @db.VarChar(150)
-  bankAccountNumber String? @map("bank_account_number") @db.VarChar(30)
+  bankName          String?     @map("bank_name") @db.VarChar(100)
+  bankAccountName   String?     @map("bank_account_name") @db.VarChar(150)
+  bankAccountNumber String?     @map("bank_account_number") @db.VarChar(30)
   // Address like students: province/district from the reference tables, the rest free text.
-  provinceId     Int?      @map("province_id")
-  districtId     Int?      @map("district_id")
-  village        String?   @db.VarChar(100)
-  address        String?   @map("address") @db.Text // house no. / details
-  notes          String?   @map("notes") @db.Text
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime? @updatedAt @map("updated_at")
+  provinceId        Int?        @map("province_id")
+  districtId        Int?        @map("district_id")
+  village           String?     @db.VarChar(100)
+  address           String?     @map("address") @db.Text // house no. / details
+  notes             String?     @map("notes") @db.Text
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime?   @updatedAt @map("updated_at")
 
   user      User              @relation(fields: [userId], references: [userId], onDelete: Cascade)
   province  Province?         @relation(fields: [provinceId], references: [provinceId], onDelete: SetNull)
@@ -270,9 +288,9 @@ model Student {
   updatedAt      DateTime?     @updatedAt @map("updated_at")
 
   // Relations
-  ethnicity       Ethnicity?     @relation(fields: [ethnicityId], references: [ethnicityId], onDelete: SetNull)
-  province        Province?      @relation(fields: [provinceId], references: [provinceId], onDelete: SetNull)
-  district        District?      @relation(fields: [districtId], references: [districtId], onDelete: SetNull)
+  ethnicity       Ethnicity?        @relation(fields: [ethnicityId], references: [ethnicityId], onDelete: SetNull)
+  province        Province?         @relation(fields: [provinceId], references: [provinceId], onDelete: SetNull)
+  district        District?         @relation(fields: [districtId], references: [districtId], onDelete: SetNull)
   classStudents   ClassStudent[]
   parentStudents  ParentStudent[]
   cards           Card[]
@@ -460,6 +478,7 @@ enum AttendanceStatus {
 
 enum AttendanceSource {
   card // created by the first gate tap of the day
+  auto // no tap, no leave and no teacher mark by the daily cut-off: absent
   teacher // set by a teacher/admin (wins over card and leave)
   leave // set when a leave request is approved
 }
@@ -621,12 +640,16 @@ model WalletTransaction {
   descriptionLo   String?         @map("description_lo") @db.VarChar(255)
   referenceNo     String?         @unique @map("reference_no") @db.VarChar(50)
   processedBy     Int?            @map("processed_by")
+  // A refund points at the purchase it reverses; unique, so a purchase is refunded at most once.
+  refundOfId      Int?            @unique @map("refund_of_id")
   createdAt       DateTime        @default(now()) @map("created_at")
 
-  wallet       WalletAccount @relation(fields: [walletId], references: [walletId], onDelete: Restrict)
-  shop         Shop?         @relation(fields: [shopId], references: [shopId], onDelete: SetNull)
-  processor    User?         @relation("ProcessedBy", fields: [processedBy], references: [userId], onDelete: SetNull)
+  wallet       WalletAccount      @relation(fields: [walletId], references: [walletId], onDelete: Restrict)
+  shop         Shop?              @relation(fields: [shopId], references: [shopId], onDelete: SetNull)
+  processor    User?              @relation("ProcessedBy", fields: [processedBy], references: [userId], onDelete: SetNull)
   topUpRequest TopUpRequest?
+  refundOf     WalletTransaction? @relation("Refund", fields: [refundOfId], references: [transactionId], onDelete: Restrict, onUpdate: Restrict)
+  refund       WalletTransaction? @relation("Refund")
 
   @@index([walletId, createdAt])
   @@index([transactionType])

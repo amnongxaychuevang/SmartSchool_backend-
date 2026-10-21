@@ -37,6 +37,7 @@ class DashboardController {
         _sum: { amount: true },
         where: {
           transactionType: 'purchase',
+          refund: { is: null },
           createdAt: {
             gte: today,
             lt: tomorrow,
