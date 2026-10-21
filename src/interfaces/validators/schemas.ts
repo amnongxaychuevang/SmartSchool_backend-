@@ -635,3 +635,116 @@ export const feePaymentSchema = z
     message: "A bank transfer needs its reference number",
     path: ["referenceNo"],
   });
+
+// ─── 14. Behavior ─────────────────────────────────────────
+export const behaviorCategorySchema = z.object({
+  nameEn: z.string().min(1).max(100),
+  nameLo: z.string().min(1).max(100),
+  type: z.enum(['merit', 'demerit']),
+  defaultPoints: z.coerce.number().int().positive().optional(),
+  severity: z.enum(['low', 'medium', 'high']).optional(),
+});
+
+export const behaviorRecordCreateSchema = z.object({
+  studentId: z.coerce.number().int().positive(),
+  categoryId: z.coerce.number().int().positive().optional(),
+  type: z.enum(['merit', 'demerit']),
+  titleEn: z.string().min(1).max(150),
+  titleLo: z.string().min(1).max(150),
+  description: z.string().optional(),
+  points: z.coerce.number().int().positive().optional(),
+  incidentDate: z.string().optional(),
+  actionTaken: z.string().max(255).optional(),
+  notifyParent: z.boolean().optional(),
+});
+
+// ─── 15. Bus Transportation ───────────────────────────────
+export const busVehicleSchema = z.object({
+  plateNumber: z.string().min(1).max(30),
+  model: z.string().max(100).optional(),
+  capacity: z.coerce.number().int().positive().optional(),
+  driverName: z.string().min(1).max(100),
+  driverPhone: z.string().min(1).max(50),
+  status: z.enum(['active', 'maintenance', 'inactive']).optional(),
+});
+
+export const busRouteSchema = z.object({
+  routeNameEn: z.string().min(1).max(100),
+  routeNameLo: z.string().min(1).max(100),
+  vehicleId: z.coerce.number().int().positive().nullable().optional(),
+  description: z.string().optional(),
+  stops: z.any().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const busStudentAssignSchema = z.object({
+  studentId: z.coerce.number().int().positive(),
+  routeId: z.coerce.number().int().positive(),
+  vehicleId: z.coerce.number().int().positive().optional(),
+  pickupStop: z.string().max(150).optional(),
+  dropoffStop: z.string().max(150).optional(),
+});
+
+export const busScanSchema = z.object({
+  cardUid: z.string().min(1),
+  vehicleId: z.coerce.number().int().positive().optional(),
+  logType: z.enum(['board', 'alight']).optional(),
+  direction: z.enum(['to_school', 'to_home']).optional(),
+  location: z.string().max(150).optional(),
+});
+
+// ─── 16. Library ──────────────────────────────────────────
+export const bookCategorySchema = z.object({
+  nameEn: z.string().min(1).max(100),
+  nameLo: z.string().min(1).max(100),
+});
+
+export const bookCreateSchema = z.object({
+  isbn: z.string().max(50).optional(),
+  titleEn: z.string().min(1).max(200),
+  titleLo: z.string().min(1).max(200),
+  author: z.string().min(1).max(150),
+  publisher: z.string().max(150).optional(),
+  publishYear: z.coerce.number().int().optional(),
+  categoryId: z.coerce.number().int().positive().nullable().optional(),
+  shelfLocation: z.string().max(100).optional(),
+  totalCopies: z.coerce.number().int().positive().optional(),
+  coverUrl: z.string().max(255).optional(),
+});
+
+export const bookUpdateSchema = bookCreateSchema.partial();
+
+export const bookBorrowSchema = z.object({
+  cardUid: z.string().optional(),
+  studentId: z.coerce.number().int().positive().optional(),
+  bookId: z.coerce.number().int().positive(),
+  days: z.coerce.number().int().positive().optional(),
+  notes: z.string().max(255).optional(),
+});
+
+// ─── 18. At-Risk Interventions ────────────────────────────
+export const riskInterventionSchema = z.object({
+  studentId: z.coerce.number().int().positive(),
+  assessmentId: z.coerce.number().int().positive().optional(),
+  title: z.string().min(1).max(150),
+  description: z.string().min(1),
+  status: z.enum(['pending', 'in_progress', 'resolved']).optional(),
+  notes: z.string().optional(),
+});
+
+// ─── 19. Schools ──────────────────────────────────────────
+export const schoolCreateSchema = z.object({
+  schoolCode: z.string().min(1).max(50),
+  nameEn: z.string().min(1).max(150),
+  nameLo: z.string().min(1).max(150),
+  phone: z.string().max(50).optional(),
+  email: z.string().email().optional(),
+  addressEn: z.string().optional(),
+  addressLo: z.string().optional(),
+  logoUrl: z.string().max(255).optional(),
+  plan: z.enum(['trial', 'standard', 'enterprise']).optional(),
+  maxStudents: z.coerce.number().int().positive().optional(),
+});
+
+export const schoolUpdateSchema = schoolCreateSchema.partial();
+

@@ -99,7 +99,11 @@ class NotificationDispatcher {
       | "grade"
       | "transaction"
       | "general"
-      | "fee",
+      | "fee"
+      | "behavior"
+      | "transport"
+      | "library"
+      | "at_risk",
     messageEn: string,
     messageLo: string,
   ): Promise<number> {

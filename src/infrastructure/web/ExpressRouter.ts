@@ -34,6 +34,11 @@ import feeController from '../../interfaces/controllers/FeeController';
 import promotionController from '../../interfaces/controllers/PromotionController';
 import schoolEventController from '../../interfaces/controllers/SchoolEventController';
 import receiptController from '../../interfaces/controllers/ReceiptController';
+import behaviorController from '../../interfaces/controllers/BehaviorController';
+import busController from '../../interfaces/controllers/BusController';
+import libraryController from '../../interfaces/controllers/LibraryController';
+import riskAnalyticsController from '../../interfaces/controllers/RiskAnalyticsController';
+import schoolController from '../../interfaces/controllers/SchoolController';
 
 // Middlewares
 import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
@@ -67,6 +72,11 @@ import {
   roleCreateSchema, roleUpdateSchema,
   feeTypeCreateSchema, feeTypeUpdateSchema, feeStructureCreateSchema, feeStructureUpdateSchema,
   invoiceUpdateSchema, invoiceVoidSchema, feePaymentSchema,
+  behaviorCategorySchema, behaviorRecordCreateSchema,
+  busVehicleSchema, busRouteSchema, busStudentAssignSchema, busScanSchema,
+  bookCategorySchema, bookCreateSchema, bookUpdateSchema, bookBorrowSchema,
+  riskInterventionSchema,
+  schoolCreateSchema, schoolUpdateSchema,
 } from '../../interfaces/validators/schemas';
 
 // Strict limiter for credential-guessing-prone / abuse-prone endpoints.
@@ -354,5 +364,64 @@ router.get('/parents/me/children/:studentId/invoices', AuthMiddleware.verifyToke
 
 // ─── Audit Logs (Admin) ─────────────────────────────────
 router.get('/audit-logs', AuthMiddleware.verifyToken, AuthMiddleware.authorize('audit.view'), auditLogController.list);
+
+// ─── 14. Behavior / Discipline ──────────────────────────
+router.get('/behavior/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view'), behaviorController.getOverview);
+router.get('/behavior/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view'), behaviorController.listCategories);
+router.post('/behavior/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage'), validate(behaviorCategorySchema), behaviorController.createCategory);
+router.get('/behavior/records', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view'), behaviorController.listRecords);
+router.post('/behavior/records', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage'), validate(behaviorRecordCreateSchema), behaviorController.createRecord);
+router.delete('/behavior/records/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.manage'), behaviorController.deleteRecord);
+router.get('/behavior/students/:studentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('behavior.view'), behaviorController.getStudentConduct);
+
+// ─── 15. Bus Transportation ─────────────────────────────
+router.get('/bus/vehicles', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.view'), busController.listVehicles);
+router.post('/bus/vehicles', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.manage'), validate(busVehicleSchema), busController.createVehicle);
+router.put('/bus/vehicles/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.manage'), validate(busVehicleSchema.partial()), busController.updateVehicle);
+router.delete('/bus/vehicles/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.manage'), busController.deleteVehicle);
+
+router.get('/bus/routes', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.view'), busController.listRoutes);
+router.post('/bus/routes', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.manage'), validate(busRouteSchema), busController.createRoute);
+router.put('/bus/routes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.manage'), validate(busRouteSchema.partial()), busController.updateRoute);
+router.delete('/bus/routes/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.manage'), busController.deleteRoute);
+
+router.get('/bus/students', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.view'), busController.listBusStudents);
+router.post('/bus/students', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.manage'), validate(busStudentAssignSchema), busController.assignStudent);
+router.delete('/bus/students/:studentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.manage'), busController.removeStudent);
+
+router.post('/bus/scan', scanLimiter, validate(busScanSchema), busController.scanBusCard);
+router.get('/bus/logs', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.view'), busController.listLogs);
+router.get('/bus/manifest', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.view'), busController.getLiveManifest);
+
+// ─── 16. Library Management ─────────────────────────────
+router.get('/library/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.getOverview);
+router.get('/library/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.listCategories);
+router.post('/library/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), validate(bookCategorySchema), libraryController.createCategory);
+
+router.get('/library/books', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.listBooks);
+router.get('/library/books/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.getBook);
+router.post('/library/books', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), validate(bookCreateSchema), libraryController.createBook);
+router.put('/library/books/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), validate(bookUpdateSchema), libraryController.updateBook);
+router.delete('/library/books/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), libraryController.deleteBook);
+
+router.get('/library/loans', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.listLoans);
+router.post('/library/borrow', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), validate(bookBorrowSchema), libraryController.borrowBook);
+router.post('/library/loans/:loanId/return', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.manage'), libraryController.returnBook);
+
+// ─── 18. At-Risk Student Analytics ──────────────────────
+router.get('/analytics/at-risk/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('analytics.at_risk_view'), riskAnalyticsController.getOverview);
+router.get('/analytics/at-risk', AuthMiddleware.verifyToken, AuthMiddleware.authorize('analytics.at_risk_view'), riskAnalyticsController.listAtRisk);
+router.post('/analytics/at-risk/run', AuthMiddleware.verifyToken, AuthMiddleware.authorize('analytics.at_risk_manage'), riskAnalyticsController.runAssessment);
+router.get('/analytics/at-risk/:studentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('analytics.at_risk_view'), riskAnalyticsController.getStudentRiskDetail);
+router.post('/analytics/at-risk/interventions', AuthMiddleware.verifyToken, AuthMiddleware.authorize('analytics.at_risk_manage'), validate(riskInterventionSchema), riskAnalyticsController.createIntervention);
+router.put('/analytics/at-risk/interventions/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('analytics.at_risk_manage'), riskAnalyticsController.updateIntervention);
+
+// ─── 19. Multi-School (SaaS) ────────────────────────────
+router.get('/schools/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.view'), schoolController.getOverview);
+router.get('/schools', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.view'), schoolController.listSchools);
+router.get('/schools/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.view'), schoolController.getSchool);
+router.post('/schools', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.manage'), validate(schoolCreateSchema), schoolController.createSchool);
+router.put('/schools/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.manage'), validate(schoolUpdateSchema), schoolController.updateSchool);
+router.delete('/schools/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('schools.manage'), schoolController.deleteSchool);
 
 export default router;

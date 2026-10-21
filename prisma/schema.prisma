@@ -94,6 +94,10 @@ model User {
   issuedInvoices       Invoice[]      @relation("InvoiceIssuer")
   receivedFeePayments  FeePayment[]   @relation("FeePaymentReceiver")
 
+  recordedBehaviors   BehaviorRecord[]   @relation("BehaviorRecorder")
+  processedLoans      BookLoan[]         @relation("BookLoanProcessor")
+  actionInterventions RiskIntervention[] @relation("InterventionActor")
+
   @@index([roleId])
   @@map("users")
 }
@@ -308,6 +312,13 @@ model Student {
   leaveRequests   LeaveRequest[]
   invoices        Invoice[]
 
+  behaviorRecords BehaviorRecord[]
+  busStudent      BusStudent?
+  busLogs         BusLog[]
+  bookLoans       BookLoan[]
+  riskAssessments StudentRiskAssessment[]
+  interventions   RiskIntervention[]
+
   @@index([status])
   @@map("students")
 }
@@ -439,6 +450,7 @@ model Card {
   student        Student         @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
   issuer         User?           @relation("CardIssuer", fields: [issuedBy], references: [userId], onDelete: SetNull)
   attendanceLogs AttendanceLog[]
+  busLogs        BusLog[]
 
   @@index([status])
   @@map("cards")
@@ -707,6 +719,10 @@ enum NotificationType {
   transaction
   general
   fee
+  behavior
+  transport
+  library
+  at_risk
 }
 
 enum NotificationChannel {
@@ -1042,3 +1058,237 @@ model Assignment {
   @@index([classId, dueDate])
   @@map("assignments")
 }
+
+// ─── 14. Behavior & Discipline (ພຶດຕິກຳ ແລະ ວິໄນ) ───────────
+enum BehaviorType {
+  merit
+  demerit
+}
+
+model BehaviorCategory {
+  categoryId    Int          @id @default(autoincrement()) @map("category_id")
+  nameEn        String       @map("name_en") @db.VarChar(100)
+  nameLo        String       @map("name_lo") @db.VarChar(100)
+  type          BehaviorType
+  defaultPoints Int          @default(5) @map("default_points")
+  severity      String       @default("low") @db.VarChar(20) // low, medium, high
+  isActive      Boolean      @default(true) @map("is_active")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  records BehaviorRecord[]
+
+  @@map("behavior_categories")
+}
+
+model BehaviorRecord {
+  recordId     Int               @id @default(autoincrement()) @map("record_id")
+  studentId    Int               @map("student_id")
+  categoryId   Int?              @map("category_id")
+  type         BehaviorType
+  titleEn      String            @map("title_en") @db.VarChar(150)
+  titleLo      String            @map("title_lo") @db.VarChar(150)
+  description  String?           @db.Text
+  points       Int               @default(5)
+  incidentDate DateTime          @default(now()) @map("incident_date")
+  actionTaken  String?           @map("action_taken") @db.VarChar(255)
+  notifyParent Boolean           @default(true) @map("notify_parent")
+  recordedBy   Int?              @map("recorded_by")
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  student  Student           @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  category BehaviorCategory? @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
+  recorder User?             @relation("BehaviorRecorder", fields: [recordedBy], references: [userId], onDelete: SetNull)
+
+  @@index([studentId, incidentDate])
+  @@map("behavior_records")
+}
+
+// ─── 15. Transportation / School Bus (ລົດຮັບສົ່ງ) ─────────────
+model BusVehicle {
+  vehicleId   Int       @id @default(autoincrement()) @map("vehicle_id")
+  plateNumber String    @unique @map("plate_number") @db.VarChar(30)
+  model       String?   @db.VarChar(100)
+  capacity    Int       @default(15)
+  driverName  String    @map("driver_name") @db.VarChar(100)
+  driverPhone String    @map("driver_phone") @db.VarChar(50)
+  status      String    @default("active") @db.VarChar(30) // active, maintenance, inactive
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  routes      BusRoute[]
+  busStudents BusStudent[]
+  busLogs     BusLog[]
+
+  @@map("bus_vehicles")
+}
+
+model BusRoute {
+  routeId     Int       @id @default(autoincrement()) @map("route_id")
+  routeNameEn String    @map("route_name_en") @db.VarChar(100)
+  routeNameLo String    @map("route_name_lo") @db.VarChar(100)
+  vehicleId   Int?      @map("vehicle_id")
+  description String?   @db.Text
+  stops       Json?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  vehicle     BusVehicle?  @relation(fields: [vehicleId], references: [vehicleId], onDelete: SetNull)
+  busStudents BusStudent[]
+  busLogs     BusLog[]
+
+  @@map("bus_routes")
+}
+
+model BusStudent {
+  id          Int      @id @default(autoincrement())
+  studentId   Int      @unique @map("student_id")
+  routeId     Int      @map("route_id")
+  vehicleId   Int?     @map("vehicle_id")
+  pickupStop  String?  @map("pickup_stop") @db.VarChar(150)
+  dropoffStop String?  @map("dropoff_stop") @db.VarChar(150)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  student Student     @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  route   BusRoute    @relation(fields: [routeId], references: [routeId], onDelete: Cascade)
+  vehicle BusVehicle? @relation(fields: [vehicleId], references: [vehicleId], onDelete: SetNull)
+
+  @@map("bus_students")
+}
+
+model BusLog {
+  logId     Int      @id @default(autoincrement()) @map("log_id")
+  studentId Int      @map("student_id")
+  cardId    Int?     @map("card_id")
+  vehicleId Int?     @map("vehicle_id")
+  routeId   Int?     @map("route_id")
+  logType   String   @map("log_type") @db.VarChar(30) // board, alight
+  direction String   @default("to_school") @db.VarChar(30) // to_school, to_home
+  logTime   DateTime @default(now()) @map("log_time")
+  location  String?  @db.VarChar(150)
+  scannedBy Int?     @map("scanned_by")
+
+  student Student     @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  card    Card?       @relation(fields: [cardId], references: [cardId], onDelete: SetNull)
+  vehicle BusVehicle? @relation(fields: [vehicleId], references: [vehicleId], onDelete: SetNull)
+  route   BusRoute?   @relation(fields: [routeId], references: [routeId], onDelete: SetNull)
+
+  @@index([studentId, logTime])
+  @@index([vehicleId, logTime])
+  @@map("bus_logs")
+}
+
+// ─── 16. Library Management (ຫ້ອງສະໝຸດ) ──────────────────────
+model BookCategory {
+  categoryId Int    @id @default(autoincrement()) @map("category_id")
+  nameEn     String @map("name_en") @db.VarChar(100)
+  nameLo     String @map("name_lo") @db.VarChar(100)
+  books      Book[]
+
+  @@map("book_categories")
+}
+
+model Book {
+  bookId          Int       @id @default(autoincrement()) @map("book_id")
+  isbn            String?   @unique @db.VarChar(50)
+  titleEn         String    @map("title_en") @db.VarChar(200)
+  titleLo         String    @map("title_lo") @db.VarChar(200)
+  author          String    @db.VarChar(150)
+  publisher       String?   @db.VarChar(150)
+  publishYear     Int?      @map("publish_year")
+  categoryId      Int?      @map("category_id")
+  shelfLocation   String?   @map("shelf_location") @db.VarChar(100)
+  totalCopies     Int       @default(1) @map("total_copies")
+  availableCopies Int       @default(1) @map("available_copies")
+  coverUrl        String?   @map("cover_url") @db.VarChar(255)
+  status          String    @default("available") @db.VarChar(30) // available, out_of_stock, archived
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime? @updatedAt @map("updated_at")
+
+  category BookCategory? @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
+  loans    BookLoan[]
+
+  @@index([titleEn, titleLo])
+  @@map("books")
+}
+
+model BookLoan {
+  loanId       Int       @id @default(autoincrement()) @map("loan_id")
+  bookId       Int       @map("book_id")
+  studentId    Int       @map("student_id")
+  borrowedDate DateTime  @default(now()) @map("borrowed_date")
+  dueDate      DateTime  @map("due_date") @db.Date
+  returnedDate DateTime? @map("returned_date")
+  status       String    @default("borrowed") @db.VarChar(30) // borrowed, returned, overdue, lost
+  processedBy  Int?      @map("processed_by")
+  notes        String?   @db.VarChar(255)
+
+  book      Book    @relation(fields: [bookId], references: [bookId], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  processor User?   @relation("BookLoanProcessor", fields: [processedBy], references: [userId], onDelete: SetNull)
+
+  @@index([studentId, status])
+  @@index([bookId, status])
+  @@map("book_loans")
+}
+
+// ─── 18. At-Risk Student Analytics (ວິເຄາະນັກຮຽນສ່ຽງ) ──────────
+model StudentRiskAssessment {
+  assessmentId      Int       @id @default(autoincrement()) @map("assessment_id")
+  studentId         Int       @map("student_id")
+  riskLevel         String    @map("risk_level") @db.VarChar(20) // low, medium, high
+  riskScore         Int       @map("risk_score") // 0 - 100
+  factors           Json
+  assessedAt        DateTime  @default(now()) @map("assessed_at")
+  teacherNotified   Boolean   @default(false) @map("teacher_notified")
+  teacherNotifiedAt DateTime? @map("teacher_notified_at")
+
+  student       Student            @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  interventions RiskIntervention[]
+
+  @@index([studentId, assessedAt])
+  @@index([riskLevel])
+  @@map("student_risk_assessments")
+}
+
+model RiskIntervention {
+  interventionId Int       @id @default(autoincrement()) @map("intervention_id")
+  studentId      Int       @map("student_id")
+  assessmentId   Int?      @map("assessment_id")
+  title          String    @db.VarChar(150)
+  description    String    @db.Text
+  status         String    @default("pending") @db.VarChar(30) // pending, in_progress, resolved
+  actionBy       Int?      @map("action_by")
+  actionDate     DateTime  @default(now()) @map("action_date")
+  notes          String?   @db.Text
+
+  student    Student                @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  assessment StudentRiskAssessment? @relation(fields: [assessmentId], references: [assessmentId], onDelete: SetNull)
+  actor      User?                  @relation("InterventionActor", fields: [actionBy], references: [userId], onDelete: SetNull)
+
+  @@index([studentId, status])
+  @@map("risk_interventions")
+}
+
+// ─── 19. Multi-School / SaaS (ລະບົບຫຼາຍໂຮງຮຽນ) ───────────────
+model School {
+  schoolId    Int       @id @default(autoincrement()) @map("school_id")
+  schoolCode  String    @unique @map("school_code") @db.VarChar(50)
+  nameEn      String    @map("name_en") @db.VarChar(150)
+  nameLo      String    @map("name_lo") @db.VarChar(150)
+  phone       String?   @db.VarChar(50)
+  email       String?   @db.VarChar(150)
+  addressEn   String?   @map("address_en") @db.Text
+  addressLo   String?   @map("address_lo") @db.Text
+  logoUrl     String?   @map("logo_url") @db.VarChar(255)
+  plan        String    @default("standard") @db.VarChar(50)
+  status      String    @default("active") @db.VarChar(30)
+  maxStudents Int       @default(500) @map("max_students")
+  settings    Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  @@map("schools")
+}
+

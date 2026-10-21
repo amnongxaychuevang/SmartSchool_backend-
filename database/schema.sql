@@ -453,7 +453,7 @@ CREATE TABLE `notifications` (
     `notification_id` INTEGER NOT NULL AUTO_INCREMENT,
     `recipient_user_id` INTEGER NOT NULL,
     `student_id` INTEGER NULL,
-    `type` ENUM('check_in', 'check_out', 'absence', 'grade', 'transaction', 'general') NOT NULL,
+    `type` ENUM('check_in', 'check_out', 'absence', 'grade', 'transaction', 'general', 'fee', 'behavior', 'transport', 'library', 'at_risk') NOT NULL,
     `channel` ENUM('whatsapp', 'app_push', 'email') NOT NULL,
     `message_en` TEXT NOT NULL,
     `message_lo` TEXT NOT NULL,
@@ -552,6 +552,25 @@ CREATE TABLE `leave_requests` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `school_events` (
+    `event_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `title_en` VARCHAR(150) NOT NULL,
+    `title_lo` VARCHAR(150) NOT NULL,
+    `description_en` TEXT NULL,
+    `description_lo` TEXT NULL,
+    `type` ENUM('holiday', 'exam', 'activity', 'meeting', 'other') NOT NULL,
+    `start_date` DATE NOT NULL,
+    `end_date` DATE NOT NULL,
+    `school_closed` BOOLEAN NOT NULL DEFAULT false,
+    `created_by` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    INDEX `school_events_start_date_end_date_idx`(`start_date`, `end_date`),
+    PRIMARY KEY (`event_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `announcements` (
     `announcement_id` INTEGER NOT NULL AUTO_INCREMENT,
     `title_en` VARCHAR(255) NOT NULL,
@@ -623,6 +642,9 @@ CREATE TABLE `invoices` (
     `void_reason` VARCHAR(255) NULL,
     `issued_by` INTEGER NULL,
     `issued_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `reminder_before_at` DATETIME(3) NULL,
+    `overdue_reminders` INTEGER NOT NULL DEFAULT 0,
+    `last_reminder_at` DATETIME(3) NULL,
 
     UNIQUE INDEX `invoices_invoice_no_key`(`invoice_no`),
     INDEX `invoices_status_idx`(`status`),
@@ -647,6 +669,223 @@ CREATE TABLE `fee_payments` (
     INDEX `fee_payments_invoice_id_idx`(`invoice_id`),
     INDEX `fee_payments_paid_at_idx`(`paid_at`),
     PRIMARY KEY (`payment_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `assignments` (
+    `assignment_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `class_id` INTEGER NOT NULL,
+    `subject_id` INTEGER NULL,
+    `title` VARCHAR(200) NOT NULL,
+    `description` TEXT NULL,
+    `due_date` DATE NOT NULL,
+    `created_by` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    INDEX `assignments_class_id_due_date_idx`(`class_id`, `due_date`),
+    PRIMARY KEY (`assignment_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `behavior_categories` (
+    `category_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name_en` VARCHAR(100) NOT NULL,
+    `name_lo` VARCHAR(100) NOT NULL,
+    `type` ENUM('merit', 'demerit') NOT NULL,
+    `default_points` INTEGER NOT NULL DEFAULT 5,
+    `severity` VARCHAR(20) NOT NULL DEFAULT 'low',
+    `is_active` BOOLEAN NOT NULL DEFAULT true,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`category_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `behavior_records` (
+    `record_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `category_id` INTEGER NULL,
+    `type` ENUM('merit', 'demerit') NOT NULL,
+    `title_en` VARCHAR(150) NOT NULL,
+    `title_lo` VARCHAR(150) NOT NULL,
+    `description` TEXT NULL,
+    `points` INTEGER NOT NULL DEFAULT 5,
+    `incident_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `action_taken` VARCHAR(255) NULL,
+    `notify_parent` BOOLEAN NOT NULL DEFAULT true,
+    `recorded_by` INTEGER NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `behavior_records_student_id_incident_date_idx`(`student_id`, `incident_date`),
+    PRIMARY KEY (`record_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `bus_vehicles` (
+    `vehicle_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `plate_number` VARCHAR(30) NOT NULL,
+    `model` VARCHAR(100) NULL,
+    `capacity` INTEGER NOT NULL DEFAULT 15,
+    `driver_name` VARCHAR(100) NOT NULL,
+    `driver_phone` VARCHAR(50) NOT NULL,
+    `status` VARCHAR(30) NOT NULL DEFAULT 'active',
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
+
+    UNIQUE INDEX `bus_vehicles_plate_number_key`(`plate_number`),
+    PRIMARY KEY (`vehicle_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `bus_routes` (
+    `route_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `route_name_en` VARCHAR(100) NOT NULL,
+    `route_name_lo` VARCHAR(100) NOT NULL,
+    `vehicle_id` INTEGER NULL,
+    `description` TEXT NULL,
+    `stops` JSON NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT true,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
+
+    PRIMARY KEY (`route_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `bus_students` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `route_id` INTEGER NOT NULL,
+    `vehicle_id` INTEGER NULL,
+    `pickup_stop` VARCHAR(150) NULL,
+    `dropoff_stop` VARCHAR(150) NULL,
+    `is_active` BOOLEAN NOT NULL DEFAULT true,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `bus_students_student_id_key`(`student_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `bus_logs` (
+    `log_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `card_id` INTEGER NULL,
+    `vehicle_id` INTEGER NULL,
+    `route_id` INTEGER NULL,
+    `log_type` VARCHAR(30) NOT NULL,
+    `direction` VARCHAR(30) NOT NULL DEFAULT 'to_school',
+    `log_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `location` VARCHAR(150) NULL,
+    `scanned_by` INTEGER NULL,
+
+    INDEX `bus_logs_student_id_log_time_idx`(`student_id`, `log_time`),
+    INDEX `bus_logs_vehicle_id_log_time_idx`(`vehicle_id`, `log_time`),
+    PRIMARY KEY (`log_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `book_categories` (
+    `category_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name_en` VARCHAR(100) NOT NULL,
+    `name_lo` VARCHAR(100) NOT NULL,
+
+    PRIMARY KEY (`category_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `books` (
+    `book_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `isbn` VARCHAR(50) NULL,
+    `title_en` VARCHAR(200) NOT NULL,
+    `title_lo` VARCHAR(200) NOT NULL,
+    `author` VARCHAR(150) NOT NULL,
+    `publisher` VARCHAR(150) NULL,
+    `publish_year` INTEGER NULL,
+    `category_id` INTEGER NULL,
+    `shelf_location` VARCHAR(100) NULL,
+    `total_copies` INTEGER NOT NULL DEFAULT 1,
+    `available_copies` INTEGER NOT NULL DEFAULT 1,
+    `cover_url` VARCHAR(255) NULL,
+    `status` VARCHAR(30) NOT NULL DEFAULT 'available',
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
+
+    UNIQUE INDEX `books_isbn_key`(`isbn`),
+    INDEX `books_title_en_title_lo_idx`(`title_en`, `title_lo`),
+    PRIMARY KEY (`book_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `book_loans` (
+    `loan_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `book_id` INTEGER NOT NULL,
+    `student_id` INTEGER NOT NULL,
+    `borrowed_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `due_date` DATE NOT NULL,
+    `returned_date` DATETIME(3) NULL,
+    `status` VARCHAR(30) NOT NULL DEFAULT 'borrowed',
+    `processed_by` INTEGER NULL,
+    `notes` VARCHAR(255) NULL,
+
+    INDEX `book_loans_student_id_status_idx`(`student_id`, `status`),
+    INDEX `book_loans_book_id_status_idx`(`book_id`, `status`),
+    PRIMARY KEY (`loan_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `student_risk_assessments` (
+    `assessment_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `risk_level` VARCHAR(20) NOT NULL,
+    `risk_score` INTEGER NOT NULL,
+    `factors` JSON NOT NULL,
+    `assessed_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `teacher_notified` BOOLEAN NOT NULL DEFAULT false,
+    `teacher_notified_at` DATETIME(3) NULL,
+
+    INDEX `student_risk_assessments_student_id_assessed_at_idx`(`student_id`, `assessed_at`),
+    INDEX `student_risk_assessments_risk_level_idx`(`risk_level`),
+    PRIMARY KEY (`assessment_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `risk_interventions` (
+    `intervention_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `student_id` INTEGER NOT NULL,
+    `assessment_id` INTEGER NULL,
+    `title` VARCHAR(150) NOT NULL,
+    `description` TEXT NOT NULL,
+    `status` VARCHAR(30) NOT NULL DEFAULT 'pending',
+    `action_by` INTEGER NULL,
+    `action_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `notes` TEXT NULL,
+
+    INDEX `risk_interventions_student_id_status_idx`(`student_id`, `status`),
+    PRIMARY KEY (`intervention_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `schools` (
+    `school_id` INTEGER NOT NULL AUTO_INCREMENT,
+    `school_code` VARCHAR(50) NOT NULL,
+    `name_en` VARCHAR(150) NOT NULL,
+    `name_lo` VARCHAR(150) NOT NULL,
+    `phone` VARCHAR(50) NULL,
+    `email` VARCHAR(150) NULL,
+    `address_en` TEXT NULL,
+    `address_lo` TEXT NULL,
+    `logo_url` VARCHAR(255) NULL,
+    `plan` VARCHAR(50) NOT NULL DEFAULT 'standard',
+    `status` VARCHAR(30) NOT NULL DEFAULT 'active',
+    `max_students` INTEGER NOT NULL DEFAULT 500,
+    `settings` JSON NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NULL,
+
+    UNIQUE INDEX `schools_school_code_key`(`school_code`),
+    PRIMARY KEY (`school_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
@@ -833,6 +1072,9 @@ ALTER TABLE `leave_requests` ADD CONSTRAINT `leave_requests_parent_profile_fkey`
 ALTER TABLE `leave_requests` ADD CONSTRAINT `leave_requests_approved_by_fkey` FOREIGN KEY (`approved_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `school_events` ADD CONSTRAINT `school_events_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `announcements` ADD CONSTRAINT `announcements_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`user_id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -864,4 +1106,70 @@ ALTER TABLE `fee_payments` ADD CONSTRAINT `fee_payments_invoice_id_fkey` FOREIGN
 
 -- AddForeignKey
 ALTER TABLE `fee_payments` ADD CONSTRAINT `fee_payments_received_by_fkey` FOREIGN KEY (`received_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `assignments` ADD CONSTRAINT `assignments_class_id_fkey` FOREIGN KEY (`class_id`) REFERENCES `classes`(`class_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `assignments` ADD CONSTRAINT `assignments_subject_id_fkey` FOREIGN KEY (`subject_id`) REFERENCES `subjects`(`subject_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `assignments` ADD CONSTRAINT `assignments_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `behavior_records` ADD CONSTRAINT `behavior_records_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `behavior_records` ADD CONSTRAINT `behavior_records_category_id_fkey` FOREIGN KEY (`category_id`) REFERENCES `behavior_categories`(`category_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `behavior_records` ADD CONSTRAINT `behavior_records_recorded_by_fkey` FOREIGN KEY (`recorded_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `bus_routes` ADD CONSTRAINT `bus_routes_vehicle_id_fkey` FOREIGN KEY (`vehicle_id`) REFERENCES `bus_vehicles`(`vehicle_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `bus_students` ADD CONSTRAINT `bus_students_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `bus_students` ADD CONSTRAINT `bus_students_route_id_fkey` FOREIGN KEY (`route_id`) REFERENCES `bus_routes`(`route_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `bus_students` ADD CONSTRAINT `bus_students_vehicle_id_fkey` FOREIGN KEY (`vehicle_id`) REFERENCES `bus_vehicles`(`vehicle_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `bus_logs` ADD CONSTRAINT `bus_logs_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `bus_logs` ADD CONSTRAINT `bus_logs_card_id_fkey` FOREIGN KEY (`card_id`) REFERENCES `cards`(`card_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `bus_logs` ADD CONSTRAINT `bus_logs_vehicle_id_fkey` FOREIGN KEY (`vehicle_id`) REFERENCES `bus_vehicles`(`vehicle_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `bus_logs` ADD CONSTRAINT `bus_logs_route_id_fkey` FOREIGN KEY (`route_id`) REFERENCES `bus_routes`(`route_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `books` ADD CONSTRAINT `books_category_id_fkey` FOREIGN KEY (`category_id`) REFERENCES `book_categories`(`category_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `book_loans` ADD CONSTRAINT `book_loans_book_id_fkey` FOREIGN KEY (`book_id`) REFERENCES `books`(`book_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `book_loans` ADD CONSTRAINT `book_loans_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `book_loans` ADD CONSTRAINT `book_loans_processed_by_fkey` FOREIGN KEY (`processed_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `student_risk_assessments` ADD CONSTRAINT `student_risk_assessments_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `risk_interventions` ADD CONSTRAINT `risk_interventions_student_id_fkey` FOREIGN KEY (`student_id`) REFERENCES `students`(`student_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `risk_interventions` ADD CONSTRAINT `risk_interventions_assessment_id_fkey` FOREIGN KEY (`assessment_id`) REFERENCES `student_risk_assessments`(`assessment_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `risk_interventions` ADD CONSTRAINT `risk_interventions_action_by_fkey` FOREIGN KEY (`action_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 

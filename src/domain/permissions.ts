@@ -18,6 +18,11 @@ export const PERMISSION_GROUPS = {
   fees: ['fees.view', 'fees.manage', 'fees.collect'],
   communication: ['announcements.manage', 'notifications.manage'],
   system: ['users.manage', 'roles.manage', 'settings.manage', 'audit.view'],
+  behavior: ['behavior.view', 'behavior.manage'],
+  transport: ['transport.view', 'transport.manage'],
+  library: ['library.view', 'library.manage'],
+  analytics: ['analytics.at_risk_view', 'analytics.at_risk_manage'],
+  schools: ['schools.view', 'schools.manage'],
 } as const;
 
 export type Permission = (typeof PERMISSION_GROUPS)[keyof typeof PERMISSION_GROUPS][number];
