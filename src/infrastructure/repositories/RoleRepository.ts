@@ -53,10 +53,23 @@ class RoleRepository {
     }));
   }
 
-  async create(data: { code: string; nameEn: string; nameLo: string; permissions: Permission[] }) {
+  // "Head Registrar" -> "head_registrar"; a taken code gets a suffix ("bursar_2").
+  // Names with no Latin letters fall back to "staff".
+  private async generateCode(nameEn: string) {
+    const slug = nameEn.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+    const base = /^[a-z]/.test(slug) ? slug : `staff${slug ? `_${slug}` : ''}`;
+    const taken = new Set(
+      (await prisma.role.findMany({ where: { code: { startsWith: base } }, select: { code: true } })).map((r) => r.code),
+    );
+    let code = base;
+    for (let n = 2; taken.has(code); n++) code = `${base}_${n}`;
+    return code;
+  }
+
+  async create(data: { nameEn: string; nameLo: string; permissions: Permission[] }) {
     const role = await prisma.role.create({
       data: {
-        code: data.code, nameEn: data.nameEn, nameLo: data.nameLo, portal: 'admin', isSystem: false,
+        code: await this.generateCode(data.nameEn), nameEn: data.nameEn, nameLo: data.nameLo, portal: 'admin', isSystem: false,
         permissions: { create: data.permissions.map((permission) => ({ permission })) },
       },
     });

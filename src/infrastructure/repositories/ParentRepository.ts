@@ -181,7 +181,8 @@ class ParentRepository {
       include: {
         transactions: {
           orderBy: { createdAt: 'desc' },
-          take: 20
+          take: 20,
+          include: { shop: { select: { shopId: true, shopNameEn: true, shopNameLo: true } } },
         }
       }
     });

@@ -37,7 +37,7 @@ import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
 import validate from '../../interfaces/middlewares/validate';
 import uploadImage from '../../interfaces/middlewares/uploadImage';
 import uploadPdf from '../../interfaces/middlewares/uploadPdf';
-import { saveSlip } from '../../infrastructure/storage/PhotoStorage';
+import { saveSlip, savePaymentQr } from '../../infrastructure/storage/PhotoStorage';
 import {
   loginSchema, refreshTokenSchema, logoutSchema, attendanceScanSchema,
   dailyAttendanceQuerySchema, dailyAttendanceSaveSchema, attendanceReportQuerySchema, absenceNotifySchema,
@@ -158,6 +158,7 @@ router.delete('/parents/:id/photo', AuthMiddleware.verifyToken, AuthMiddleware.a
 // ─── Parents (Parent Portal) ────────────────────────────
 router.get('/parents/me/announcements', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getAnnouncements);
 router.get('/parents/me/children', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getMyChildren);
+router.get('/parents/me/payment-info', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getPaymentInfo);
 router.get('/parents/me/children/:studentId/attendance', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildAttendance);
 router.get('/parents/me/children/:studentId/grades', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildGrades);
 router.get('/parents/me/children/:studentId/wallet', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['parent']), parentController.getChildWallet);
@@ -196,8 +197,7 @@ router.get('/attendance/daily', AuthMiddleware.verifyToken, AuthMiddleware.autho
 router.put('/attendance/daily', AuthMiddleware.verifyToken, AuthMiddleware.authorize('attendance.manage', ['teacher']), validate(dailyAttendanceSaveSchema), attendanceController.saveDaily);
 
 // ─── Wallet (shop purchase) ─────────────────────────────
-// No dedicated "cashier/shop-staff" role exists yet, so this is restricted to admin as an
-// interim measure. TODO: introduce a proper POS/staff role once that workflow is designed.
+router.get('/wallet/card/:uid', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.pos'), walletController.lookupCard);
 router.post('/wallet/process', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.pos'), validate(walletProcessSchema), walletController.processTransaction);
 
 // ─── Wallet Admin ───────────────────────────────────────
@@ -268,6 +268,14 @@ router.put('/spending-limits/:studentId', AuthMiddleware.verifyToken, AuthMiddle
 // ─── Settings (Admin) ─────────────────────────────────────
 router.get('/settings', AuthMiddleware.verifyToken, AuthMiddleware.authorize('settings.manage'), settingsController.get);
 router.put('/settings', AuthMiddleware.verifyToken, AuthMiddleware.authorize('settings.manage'), validate(settingsSaveSchema), settingsController.save);
+router.post('/settings/payment-qr', AuthMiddleware.verifyToken, AuthMiddleware.authorize('settings.manage'), uploadImage('qr'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    res.json({ success: true, data: { url: await savePaymentQr(req.file.buffer) } });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ─── Announcements (Admin/Teacher) ────────────────────────
 import announcementController from '../../interfaces/controllers/AnnouncementController';

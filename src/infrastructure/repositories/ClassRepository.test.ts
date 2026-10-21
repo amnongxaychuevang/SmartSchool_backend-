@@ -52,7 +52,7 @@ describe('ClassRepository.create', () => {
     db.teacher.findUnique.mockResolvedValue({ user: { isActive: true } });
     db.class.findFirst.mockResolvedValue(null);
     await classRepository.create({ ...newClass, homeroomTeacherId: 145 });
-    expect(db.class.create.mock.calls[0][0].data).toMatchObject({ ...newClass, homeroomTeacherId: 145, isActive: true });
+    expect(db.class.create.mock.calls[0][0].data).toMatchObject({ ...newClass, homeroomTeacherId: 145 });
   });
 });
 

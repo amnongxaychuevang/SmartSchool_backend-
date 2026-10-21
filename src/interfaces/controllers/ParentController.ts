@@ -1,6 +1,7 @@
 import CreateParentUseCase from '../../application/use-cases/parents/CreateParentUseCase';
 import UpdateParentUseCase from '../../application/use-cases/parents/UpdateParentUseCase';
 import parentRepository from '../../infrastructure/repositories/ParentRepository';
+import settingsRepository from '../../infrastructure/repositories/SettingsRepository';
 import { savePhoto, removePhoto } from '../../infrastructure/storage/PhotoStorage';
 
 const createParentUseCase = new CreateParentUseCase(parentRepository);
@@ -117,6 +118,16 @@ class ParentController {
       const { studentId } = req.params;
       const grades = await parentRepository.findChildGrades(studentId, parentUserId);
       res.json({ success: true, data: grades });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // GET /parents/me/payment-info — the school account to transfer top-ups to (null until set).
+  async getPaymentInfo(req, res, next) {
+    try {
+      const settings = await settingsRepository.getAll();
+      res.json({ success: true, data: settings.paymentInfo ?? null });
     } catch (error) {
       next(error);
     }

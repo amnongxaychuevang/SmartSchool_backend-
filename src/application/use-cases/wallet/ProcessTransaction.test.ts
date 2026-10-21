@@ -77,6 +77,13 @@ describe('ProcessTransaction', () => {
     expect(repos.walletRepository.updateBalance).not.toHaveBeenCalled();
   });
 
+  it('gives business-rule failures a 4xx status so the cashier sees the reason', async () => {
+    // A plain Error becomes a 500, whose message the error handler hides in production.
+    repos.walletRepository.findByStudentId.mockResolvedValue(makeWallet({ balance: 10 }));
+
+    await expect(useCase.execute(10, 50, 5, 99)).rejects.toMatchObject({ statusCode: 422 });
+  });
+
   it('rejects a purchase on a frozen wallet', async () => {
     repos.walletRepository.findByStudentId.mockResolvedValue(makeWallet({ balance: 100, status: 'frozen' }));
 

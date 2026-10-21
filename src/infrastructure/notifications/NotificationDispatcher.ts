@@ -105,7 +105,7 @@ class NotificationDispatcher {
     const channelSetting = await prisma.schoolSetting.findUnique({
       where: { key: "notificationChannel" },
     });
-    const channel = (channelSetting?.value as any)?.default || "whatsapp";
+    const channel = (channelSetting?.value as any)?.default === "email" ? "email" : "whatsapp";
 
     const student = await prisma.student.findUnique({
       where: { studentId },
@@ -115,17 +115,22 @@ class NotificationDispatcher {
     });
     if (!student || student.parentStudents.length === 0) return 0;
 
-    const notifications = await prisma.notification.createManyAndReturn({
-      data: student.parentStudents.map((link) => ({
-        recipientUserId: link.parentUserId,
-        studentId,
-        type: type as any,
-        channel: channel as any,
-        status: "pending" as const,
-        messageEn,
-        messageLo,
-      })),
-    });
+    // One create per parent: createManyAndReturn is not supported on MySQL.
+    const notifications = await prisma.$transaction(
+      student.parentStudents.map((link) =>
+        prisma.notification.create({
+          data: {
+            recipientUserId: link.parentUserId,
+            studentId,
+            type,
+            channel,
+            status: "pending",
+            messageEn,
+            messageLo,
+          },
+        }),
+      ),
+    );
 
     for (const n of notifications) {
       this.dispatch(n.notificationId).catch((err) =>

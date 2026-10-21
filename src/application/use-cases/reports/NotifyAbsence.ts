@@ -36,24 +36,27 @@ class NotifyAbsence {
     const channelSetting = await prisma.schoolSetting.findUnique({
       where: { key: 'notificationChannel' },
     });
-    const channel = (channelSetting?.value as any)?.default || 'whatsapp';
+    const channel = (channelSetting?.value as any)?.default === 'email' ? 'email' : 'whatsapp';
 
     const excused = status === 'excused';
-    const notifications = await prisma.notification.createManyAndReturn({
-      data: student.parentStudents.map((link) => ({
-        recipientUserId: link.parentUserId,
-        studentId,
-        type: 'absence' as const,
-        channel: channel as any,
-        status: 'pending' as const,
-        messageEn: excused
-          ? `${student.fullNameEn} is on approved leave on ${date}.`
-          : `${student.fullNameEn} was not at school on ${date}. Please contact the homeroom teacher.`,
-        messageLo: excused
-          ? `${student.fullNameLo} ລາພັກ (ອະນຸມັດແລ້ວ) ໃນວັນທີ ${date}.`
-          : `${student.fullNameLo} ບໍ່ໄດ້ມາໂຮງຮຽນໃນວັນທີ ${date}. ກະລຸນາຕິດຕໍ່ຄູປະຈຳຫ້ອງ.`,
+    // One create per parent: createManyAndReturn is not supported on MySQL.
+    const notifications = await prisma.$transaction(
+      student.parentStudents.map((link) => prisma.notification.create({
+        data: {
+          recipientUserId: link.parentUserId,
+          studentId,
+          type: 'absence',
+          channel,
+          status: 'pending',
+          messageEn: excused
+            ? `${student.fullNameEn} is on approved leave on ${date}.`
+            : `${student.fullNameEn} was not at school on ${date}. Please contact the homeroom teacher.`,
+          messageLo: excused
+            ? `${student.fullNameLo} ລາພັກ (ອະນຸມັດແລ້ວ) ໃນວັນທີ ${date}.`
+            : `${student.fullNameLo} ບໍ່ໄດ້ມາໂຮງຮຽນໃນວັນທີ ${date}. ກະລຸນາຕິດຕໍ່ຄູປະຈຳຫ້ອງ.`,
+        },
       })),
-    });
+    );
 
     for (const n of notifications) {
       dispatcher.dispatch(n.notificationId).catch((err) =>

@@ -1,10 +1,22 @@
 import prisma from '../database/PrismaClient';
 
 class TopUpRepository {
-  async findMany({ status, studentId, parentUserId, page = 1, limit = 20 }: any = {}) {
+  async findMany({ status, studentId, parentUserId, search, page = 1, limit = 20 }: any = {}) {
     const skip = (page - 1) * limit;
+    const q = typeof search === 'string' ? search.trim() : '';
     const where = {
       ...(status ? { status } : {}),
+      // Student name or code, or the requesting parent's name or phone.
+      ...(q ? {
+        OR: [
+          { student: { fullNameLo: { contains: q } } },
+          { student: { fullNameEn: { contains: q } } },
+          { student: { studentCode: { contains: q } } },
+          { parentRequester: { fullNameLo: { contains: q } } },
+          { parentRequester: { fullNameEn: { contains: q } } },
+          { parentRequester: { phoneNumber: { contains: q } } },
+        ],
+      } : {}),
       ...(studentId ? { studentId: parseInt(studentId) } : {}),
       // Scopes results to a single parent's own requests — callers acting as 'parent'
       // must always pass this so they can't browse other families' top-up history.

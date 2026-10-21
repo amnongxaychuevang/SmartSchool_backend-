@@ -58,6 +58,27 @@ class CardRepository {
     return { cardId: card.cardId, studentId: card.studentId, status: card.status };
   }
 
+  /** Exact-UID lookup for the point of sale: the card, its student's current class and wallet. */
+  async findForPos(cardUid: string) {
+    return prisma.card.findUnique({
+      where: { cardUid },
+      include: {
+        student: {
+          select: {
+            studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true, photoUrl: true,
+            classStudents: {
+              where: { leftAt: null },
+              orderBy: { enrolledAt: 'desc' },
+              take: 1,
+              select: { class: { select: { classId: true, classNameEn: true, classNameLo: true } } },
+            },
+            walletAccount: { select: { walletId: true, balance: true, status: true } },
+          },
+        },
+      },
+    });
+  }
+
   async create(data) {
     return prisma.card.create({
       data,
