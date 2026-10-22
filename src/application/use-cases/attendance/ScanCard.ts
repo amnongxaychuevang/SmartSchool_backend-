@@ -65,7 +65,15 @@ class ScanCard {
       success: true,
       logType,
       studentId: card.studentId,
+      cardUid,
       time: attendanceLog.logTime,
+      student: student ? {
+        fullNameLo: student.fullNameLo,
+        fullNameEn: student.fullNameEn,
+        studentCode: student.studentCode,
+        photoUrl: student.photoUrl,
+        class: student.classStudents?.[0]?.class ?? null,
+      } : null,
     };
   }
 }

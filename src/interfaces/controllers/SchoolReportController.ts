@@ -38,6 +38,20 @@ class SchoolReportController {
       next(error);
     }
   }
+
+  async cashflow(req, res, next) {
+    try {
+      const { academicYear, startDate, endDate } = req.query;
+      const data = await schoolReportRepository.cashflowSummary({
+        academicYear: typeof academicYear === 'string' && academicYear ? academicYear : undefined,
+        startDate: typeof startDate === 'string' && startDate ? startDate : undefined,
+        endDate: typeof endDate === 'string' && endDate ? endDate : undefined,
+      });
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export default new SchoolReportController();

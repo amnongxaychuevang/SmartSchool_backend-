@@ -15,7 +15,7 @@ export const PERMISSION_GROUPS = {
   attendance: ['cards.view', 'cards.manage', 'cards.export', 'attendance.manage', 'attendance.manual_tap', 'leave.manage'],
   academics: ['academics.view', 'academics.manage', 'grades.view', 'grades.manage'],
   finance: [
-    'finance.view', 'finance.topups_approve', 'finance.wallets_manage', 'finance.shops_manage',
+    'finance.view', 'finance.manage', 'finance.payroll_manage', 'finance.topups_approve', 'finance.wallets_manage', 'finance.shops_manage',
     'finance.limits_manage', 'finance.pos',
   ],
   fees: ['fees.view', 'fees.manage', 'fees.collect'],

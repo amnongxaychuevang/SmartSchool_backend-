@@ -249,6 +249,170 @@ export class SchoolReportRepository {
       students: ordered,
     };
   }
+
+  // ── Cashflow / Income & Expense summary ──
+  async cashflowSummary({ academicYear, startDate, endDate }: { academicYear?: string; startDate?: string; endDate?: string } = {}) {
+    const feeWhere: any = {};
+    const rentalWhere: any = { status: { in: ['paid', 'partial'] } };
+    const payrollWhere: any = { status: { in: ['approved', 'paid'] } };
+    const expenseWhere: any = {};
+
+    if (startDate || endDate) {
+      const gte = startDate ? new Date(startDate) : undefined;
+      const lte = endDate ? new Date(endDate) : undefined;
+      feeWhere.paidAt = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
+      rentalWhere.paidAt = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
+      payrollWhere.approvedAt = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
+      expenseWhere.expenseDate = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
+    }
+
+    if (academicYear) {
+      feeWhere.invoice = { feeStructure: { academicYear } };
+      rentalWhere.academicYear = academicYear;
+      payrollWhere.academicYear = academicYear;
+      expenseWhere.academicYear = academicYear;
+    }
+
+    const [feePayments, shopRentals, payrollPeriods, generalExpenses] = await Promise.all([
+      prisma.feePayment.findMany({
+        where: feeWhere,
+        include: {
+          invoice: {
+            select: {
+              feeStructure: {
+                select: {
+                  academicYear: true,
+                  feeType: { select: { feeTypeId: true, nameEn: true, nameLo: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.shopRentalPayment.findMany({
+        where: rentalWhere,
+        include: {
+          shop: { select: { shopId: true, shopNameEn: true, shopNameLo: true } },
+        },
+      }),
+      prisma.payrollPeriod.findMany({
+        where: payrollWhere,
+        include: {
+          items: {
+            select: {
+              netSalary: true,
+              baseSalary: true,
+              totalAllowances: true,
+              totalDeductions: true,
+            },
+          },
+        },
+      }),
+      prisma.expense.findMany({
+        where: expenseWhere,
+        include: {
+          category: { select: { categoryId: true, nameEn: true, nameLo: true, icon: true } },
+        },
+      }),
+    ]);
+
+    // Aggregate Fee Payments by FeeType
+    const feesByType = new Map<number, { nameEn: string; nameLo: string; total: number; count: number }>();
+    let totalStudentFees = 0;
+    for (const fp of feePayments) {
+      const amt = num(fp.amount);
+      totalStudentFees += amt;
+      const ft = fp.invoice?.feeStructure?.feeType;
+      if (ft) {
+        const cur = feesByType.get(ft.feeTypeId) ?? { nameEn: ft.nameEn, nameLo: ft.nameLo, total: 0, count: 0 };
+        cur.total += amt;
+        cur.count++;
+        feesByType.set(ft.feeTypeId, cur);
+      }
+    }
+
+    // Aggregate Shop Rentals by Shop
+    const rentalsByShop = new Map<number, { shopNameEn: string; shopNameLo: string; total: number; count: number }>();
+    let totalShopRentals = 0;
+    for (const sr of shopRentals) {
+      const amt = num(sr.paidAmount);
+      totalShopRentals += amt;
+      const shop = sr.shop;
+      const cur = rentalsByShop.get(shop.shopId) ?? { shopNameEn: shop.shopNameEn, shopNameLo: shop.shopNameLo, total: 0, count: 0 };
+      cur.total += amt;
+      cur.count++;
+      rentalsByShop.set(shop.shopId, cur);
+    }
+
+    // Aggregate Payroll Expenses
+    let totalPayrollExpense = 0;
+    let totalBaseSalary = 0;
+    let totalAllowances = 0;
+    let totalDeductions = 0;
+    let totalPayrollCount = 0;
+    for (const period of payrollPeriods) {
+      for (const item of period.items) {
+        totalPayrollExpense += num(item.netSalary);
+        totalBaseSalary += num(item.baseSalary);
+        totalAllowances += num(item.totalAllowances);
+        totalDeductions += num(item.totalDeductions);
+        totalPayrollCount++;
+      }
+    }
+
+    // Aggregate General Operating Expenses
+    const expensesByCategory = new Map<number, { categoryId: number; nameEn: string; nameLo: string; icon?: string | null; total: number; count: number }>();
+    let totalGeneralExpense = 0;
+    for (const exp of generalExpenses) {
+      const amt = num(exp.amount);
+      totalGeneralExpense += amt;
+      const cat = exp.category;
+      if (cat) {
+        const cur = expensesByCategory.get(cat.categoryId) ?? {
+          categoryId: cat.categoryId,
+          nameEn: cat.nameEn,
+          nameLo: cat.nameLo,
+          icon: cat.icon,
+          total: 0,
+          count: 0,
+        };
+        cur.total += amt;
+        cur.count++;
+        expensesByCategory.set(cat.categoryId, cur);
+      }
+    }
+
+    const totalIncome = totalStudentFees + totalShopRentals;
+    const totalExpense = totalPayrollExpense + totalGeneralExpense;
+    const netCashflow = totalIncome - totalExpense;
+
+    return {
+      academicYear: academicYear ?? null,
+      dateRange: { startDate: startDate ?? null, endDate: endDate ?? null },
+      summary: {
+        totalIncome,
+        totalExpense,
+        netCashflow,
+        totalStudentFees,
+        totalShopRentals,
+        totalPayrollExpense,
+        totalGeneralExpense,
+      },
+      breakdown: {
+        feesByType: Array.from(feesByType.values()).sort((a, b) => b.total - a.total),
+        rentalsByShop: Array.from(rentalsByShop.values()).sort((a, b) => b.total - a.total),
+        expensesByCategory: Array.from(expensesByCategory.values()).sort((a, b) => b.total - a.total),
+        payroll: {
+          totalBaseSalary,
+          totalAllowances,
+          totalDeductions,
+          totalNetSalary: totalPayrollExpense,
+          itemCount: totalPayrollCount,
+          periodCount: payrollPeriods.length,
+        },
+      },
+    };
+  }
 }
 
 export default new SchoolReportRepository();

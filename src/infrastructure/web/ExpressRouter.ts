@@ -44,6 +44,8 @@ import reportExportController from '../../interfaces/controllers/ReportExportCon
 import teacherLeaveController from '../../interfaces/controllers/TeacherLeaveController';
 import riskAnalyticsController from '../../interfaces/controllers/RiskAnalyticsController';
 import chatController from '../../interfaces/controllers/ChatController';
+import payrollController from '../../interfaces/controllers/PayrollController';
+import expenseController from '../../interfaces/controllers/ExpenseController';
 
 // Middlewares
 import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
@@ -67,7 +69,7 @@ import {
   subjectCreateSchema, subjectUpdateSchema,
   gradeCreateSchema, gradeUpdateSchema,
   cardCreateSchema, cardUpdateSchema,
-  shopCreateSchema, shopUpdateSchema,
+  shopCreateSchema, shopUpdateSchema, shopRentalPaymentCreateSchema, recordShopRentalPaymentSchema,
   notificationCreateSchema,
   spendingLimitUpsertSchema,
   leaveRequestCreateSchema, leaveRequestStatusUpdateSchema,
@@ -84,6 +86,9 @@ import {
   riskInterventionSchema,
   assignmentCreateSchema, assignmentUpdateSchema,
   teacherLeaveCreateSchema, teacherLeaveDecisionSchema,
+  generatePayrollSchema, updatePayrollItemSchema, updatePayrollPeriodStatusSchema,
+  expenseCategoryCreateSchema, expenseCategoryUpdateSchema,
+  expenseCreateSchema, expenseUpdateSchema,
 } from '../../interfaces/validators/schemas';
 
 // Strict limiter for credential-guessing-prone / abuse-prone endpoints.
@@ -311,8 +316,17 @@ router.post('/uploads/slip', AuthMiddleware.verifyToken, AuthMiddleware.requireR
   }
 });
 
-// ─── Shops ──────────────────────────────────────────────
+// ─── Shops & Rentals ─────────────────────────────────────
+router.get('/shops/rentals', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.view'), shopController.listRentals);
+router.post('/shops/rentals/:rentalId/pay', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.shops_manage'), validate(recordShopRentalPaymentSchema), shopController.recordPayment);
+router.post('/shops/rentals/:rentalId/slip', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.shops_manage'), uploadImage('slip'), shopController.uploadSlip);
+router.delete('/shops/rentals/:rentalId/slip', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.shops_manage'), shopController.deleteSlip);
+router.delete('/shops/rentals/:rentalId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.shops_manage'), shopController.deleteRental);
+
 router.get('/shops', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.view'), shopController.list);
+router.get('/shops/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.view'), shopController.get);
+router.get('/shops/:id/rentals', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.view'), shopController.listRentals);
+router.post('/shops/:id/rentals', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.shops_manage'), validate(shopRentalPaymentCreateSchema), shopController.createRental);
 router.post('/shops', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.shops_manage'), validate(shopCreateSchema), shopController.create);
 router.put('/shops/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.shops_manage'), validate(shopUpdateSchema), shopController.update);
 router.delete('/shops/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.shops_manage'), shopController.delete);
@@ -374,6 +388,7 @@ router.get('/reports/students', AuthMiddleware.verifyToken, AuthMiddleware.autho
 router.get('/reports/attendance', AuthMiddleware.verifyToken, AuthMiddleware.authorize('reports.view'), validate(attendanceReportQuerySchema, 'query'), reportController.attendance);
 router.post('/reports/attendance/notify', AuthMiddleware.verifyToken, AuthMiddleware.authorize('attendance.manage'), validate(absenceNotifySchema), reportController.notifyAbsence);
 router.get('/reports/shop-sales', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'reports.view']), reportController.shopSales);
+router.get('/reports/cashflow', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'reports.view']), schoolReportController.cashflow);
 
 // ─── Fees ───────────────────────────────────────────────
 router.get('/fee-types', AuthMiddleware.verifyToken, AuthMiddleware.authorize('fees.view'), feeController.listTypes);
@@ -490,5 +505,35 @@ router.get('/chat/conversations/:id/messages', AuthMiddleware.verifyToken, chatC
 router.post('/chat/conversations/:id/messages', AuthMiddleware.verifyToken, chatController.sendMessage);
 router.put('/chat/conversations/:id/read', AuthMiddleware.verifyToken, chatController.markRead);
 router.get('/chat/contacts', AuthMiddleware.verifyToken, chatController.getContacts);
+
+// ─── 19. Teacher Payroll ─────────────────────────────────────────
+// Admin endpoints
+router.get('/payroll/periods', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'finance.manage']), payrollController.listPeriods);
+router.post('/payroll/periods/generate', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), validate(generatePayrollSchema), payrollController.generatePeriod);
+router.get('/payroll/periods/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'finance.manage']), payrollController.getPeriod);
+router.get('/payroll/periods/:id/export', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'finance.manage']), payrollController.exportBankTransfer);
+router.put('/payroll/items/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), validate(updatePayrollItemSchema), payrollController.updateItem);
+router.post('/payroll/items/:id/slip', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), uploadImage('slip'), payrollController.uploadSlip);
+router.delete('/payroll/items/:id/slip', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), payrollController.deleteSlip);
+router.patch('/payroll/periods/:id/status', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), validate(updatePayrollPeriodStatusSchema), payrollController.updatePeriodStatus);
+router.delete('/payroll/periods/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), payrollController.deletePeriod);
+
+// Teacher Portal endpoints
+router.get('/payroll/my-payslips', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher']), payrollController.getMyPayslips);
+router.get('/payroll/my-payslips/:id', AuthMiddleware.verifyToken, AuthMiddleware.requireRole(['teacher']), payrollController.getMyPayslip);
+
+// ─── 20. General Operating Expenses ──────────────────────────────
+router.get('/expense-categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'finance.manage']), expenseController.listCategories);
+router.post('/expense-categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), validate(expenseCategoryCreateSchema), expenseController.createCategory);
+router.put('/expense-categories/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), validate(expenseCategoryUpdateSchema), expenseController.updateCategory);
+router.delete('/expense-categories/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), expenseController.deleteCategory);
+
+router.get('/expenses', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'finance.manage']), expenseController.listExpenses);
+router.get('/expenses/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['finance.view', 'finance.manage']), expenseController.getExpense);
+router.post('/expenses', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), validate(expenseCreateSchema), expenseController.createExpense);
+router.put('/expenses/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), validate(expenseUpdateSchema), expenseController.updateExpense);
+router.delete('/expenses/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), expenseController.deleteExpense);
+router.post('/expenses/:id/receipt', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), uploadImage('receipt'), expenseController.uploadReceipt);
+router.delete('/expenses/:id/receipt', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), expenseController.deleteReceipt);
 
 export default router;

@@ -1,6 +1,7 @@
 import prisma from '../database/PrismaClient';
 import { currentEnrolmentWhere, getCurrentAcademicYear } from './AcademicYear';
 import { ADDRESS_INCLUDE, checkAddress } from './Address';
+import { documentNo } from '../../domain/fees';
 
 class StudentRepository {
   /**
@@ -80,7 +81,7 @@ class StudentRepository {
    * all in one transaction. `classId` (null = no class) and `parents` are optional:
    * leaving one out keeps what is there.
    */
-  async create({ classId, parents, ...student }: StudentWrite) {
+  async create({ classId, parents, feeStructureId, issuedBy, ...student }: StudentWrite & { feeStructureId?: number; issuedBy?: number }) {
     // Two admins saving at the same instant can compute the same next code; the
     // unique index rejects the second, so recompute and try again.
     for (let attempt = 1; ; attempt++) {
@@ -91,6 +92,28 @@ class StudentRepository {
           const created = await tx.student.create({ data: { ...student, studentCode, status: 'active' } });
           if (classId) await setCurrentClass(tx, created.studentId, classId);
           if (parents) await setParents(tx, created.studentId, parents);
+
+          if (feeStructureId) {
+            const fee = await tx.feeStructure.findUnique({ where: { feeStructureId: Number(feeStructureId) } });
+            if (fee) {
+              const year = Number(fee.academicYear.slice(0, 4)) || new Date().getFullYear();
+              const inv = await tx.invoice.create({
+                data: {
+                  invoiceNo: `TMP-${feeStructureId}-${created.studentId}`,
+                  studentId: created.studentId,
+                  feeStructureId: Number(feeStructureId),
+                  amount: fee.amount,
+                  dueDate: fee.dueDate,
+                  issuedBy: issuedBy ? Number(issuedBy) : null,
+                },
+              });
+              await tx.invoice.update({
+                where: { invoiceId: inv.invoiceId },
+                data: { invoiceNo: documentNo('INV', year, inv.invoiceId) },
+              });
+            }
+          }
+
           return created.studentId;
         });
         return this.findById(studentId);

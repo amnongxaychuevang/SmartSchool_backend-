@@ -2,10 +2,11 @@ import prisma from '../database/PrismaClient';
 
 class CardRepository {
   /** The list filters as a Prisma where — used by the list and its export. */
-  listWhere({ studentId, status, search }: any = {}) {
+  listWhere({ studentId, classId, status, search }: any = {}) {
     const q = typeof search === 'string' ? search.trim() : '';
     return {
       ...(studentId ? { studentId: parseInt(studentId) } : {}),
+      ...(classId ? { student: { classStudents: { some: { classId: parseInt(classId), leftAt: null } } } } : {}),
       ...(status ? { status } : {}),
       // Card UID, student code or either name.
       ...(q ? {
@@ -19,9 +20,9 @@ class CardRepository {
     };
   }
 
-  async findMany({ studentId, status, search, page = 1, limit = 20 }: any = {}) {
+  async findMany({ studentId, classId, status, search, page = 1, limit = 20 }: any = {}) {
     const skip = (page - 1) * limit;
-    const where = this.listWhere({ studentId, status, search });
+    const where = this.listWhere({ studentId, classId, status, search });
 
     const [cards, total] = await Promise.all([
       prisma.card.findMany({
@@ -31,7 +32,27 @@ class CardRepository {
         orderBy: { issuedDate: 'desc' },
         include: {
           student: {
-            select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true },
+            select: {
+              studentId: true,
+              studentCode: true,
+              fullNameEn: true,
+              fullNameLo: true,
+              photoUrl: true,
+              bloodType: true,
+              gender: true,
+              dateOfBirth: true,
+              classStudents: {
+                where: { leftAt: null },
+                take: 1,
+                orderBy: { enrolledAt: 'desc' },
+                select: { class: { select: { classId: true, classNameEn: true, classNameLo: true } } },
+              },
+              parentStudents: {
+                take: 1,
+                orderBy: { isPrimaryContact: 'desc' },
+                select: { parent: { select: { phoneNumber: true } } },
+              },
+            },
           },
           issuer: {
             select: { userId: true, fullNameEn: true, fullNameLo: true },
@@ -58,9 +79,28 @@ class CardRepository {
    * Returns the minimal shape the use-case needs, or null if the card doesn't exist.
    */
   async findByUid(cardUid) {
-    const card = await prisma.card.findUnique({ where: { cardUid } });
+    const card = await prisma.card.findUnique({
+      where: { cardUid },
+      include: {
+        student: {
+          select: {
+            studentId: true,
+            studentCode: true,
+            fullNameEn: true,
+            fullNameLo: true,
+            photoUrl: true,
+            classStudents: {
+              where: { leftAt: null },
+              orderBy: { enrolledAt: 'desc' },
+              take: 1,
+              select: { class: { select: { classId: true, classNameEn: true, classNameLo: true } } },
+            },
+          },
+        },
+      },
+    });
     if (!card) return null;
-    return { cardId: card.cardId, studentId: card.studentId, status: card.status };
+    return { cardId: card.cardId, studentId: card.studentId, status: card.status, student: card.student };
   }
 
   /** Exact-UID lookup for the point of sale: the card, its student's current class and wallet. */

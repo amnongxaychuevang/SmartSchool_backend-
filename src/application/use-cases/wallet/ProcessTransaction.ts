@@ -70,7 +70,7 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
 
     // Optimistic-locked write: guards against another concurrent purchase on the
     // same wallet racing us between the read above and this write.
-    await this.walletRepository.updateBalance(
+    const updateResult = await this.walletRepository.updateBalance(
       wallet.walletId,
       balanceAfter,
       transactionData,
@@ -96,7 +96,8 @@ class ProcessTransaction { walletRepository: any; shopRepository: any; spendingL
 
     return {
       success: true,
-      transactionId: transactionData.referenceNo,
+      transactionId: updateResult?.transaction?.transactionId ?? transactionData.referenceNo,
+      referenceNo: transactionData.referenceNo,
       balanceBefore,
       balanceAfter,
       amount: numericAmount,

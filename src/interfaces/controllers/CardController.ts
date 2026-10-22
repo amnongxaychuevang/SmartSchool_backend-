@@ -10,9 +10,10 @@ const deleteCardUseCase = new DeleteCardUseCase(cardRepository);
 class CardController {
   async list(req, res, next) {
     try {
-      const { studentId, status, search, page = 1, limit = 20 } = req.query;
+      const { studentId, classId, status, search, page = 1, limit = 20 } = req.query;
       const result = await cardRepository.findMany({
         studentId,
+        classId,
         status,
         search,
         page: parseInt(page),

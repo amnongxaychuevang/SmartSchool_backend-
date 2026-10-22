@@ -57,7 +57,7 @@ class StudentController {
 
   async create(req, res, next) {
     try {
-      const student = await createStudentUseCase.execute(req.body);
+      const student = await createStudentUseCase.execute({ ...req.body, issuedBy: req.user?.userId });
       res.json({ success: true, data: { student } });
     } catch (error) {
       next(error);
