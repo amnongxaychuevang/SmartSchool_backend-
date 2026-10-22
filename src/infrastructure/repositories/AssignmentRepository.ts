@@ -78,7 +78,7 @@ export class AssignmentRepository {
     return prisma.assignment.delete({ where: { assignmentId } });
   }
 
-  /** Homework for the class the student is in now, upcoming first. */
+  /** Homework for the class the student is in now, upcoming first, including student's own submission. */
   async listForStudent(studentId: number) {
     const enrolment = await prisma.classStudent.findFirst({
       where: { studentId, leftAt: null },
@@ -87,11 +87,157 @@ export class AssignmentRepository {
     });
     if (!enrolment) return [];
     const today = schoolDateValue();
+    const studentInclude = {
+      ...include,
+      submissions: {
+        where: { studentId },
+        take: 1,
+      },
+    };
     const [upcoming, past] = await Promise.all([
-      prisma.assignment.findMany({ where: { classId: enrolment.classId, dueDate: { gte: today } }, include, orderBy: { dueDate: 'asc' } }),
-      prisma.assignment.findMany({ where: { classId: enrolment.classId, dueDate: { lt: today } }, include, orderBy: { dueDate: 'desc' }, take: 30 }),
+      prisma.assignment.findMany({ where: { classId: enrolment.classId, dueDate: { gte: today } }, include: studentInclude, orderBy: { dueDate: 'asc' } }),
+      prisma.assignment.findMany({ where: { classId: enrolment.classId, dueDate: { lt: today } }, include: studentInclude, orderBy: { dueDate: 'desc' }, take: 30 }),
     ]);
-    return [...upcoming, ...past];
+    return [...upcoming, ...past].map((a) => ({
+      ...a,
+      mySubmission: a.submissions?.[0] || null,
+    }));
+  }
+
+  /** Submit homework for a student (creates or updates submission). */
+  async submit(data: { assignmentId: number; studentId: number; fileUrl: string; fileName?: string; fileSize?: number }) {
+    const assignment = await prisma.assignment.findUnique({ where: { assignmentId: data.assignmentId } });
+    if (!assignment) throw Object.assign(new Error('Assignment not found'), { statusCode: 404 });
+
+    const today = schoolDateValue();
+    const isLate = assignment.dueDate < today;
+
+    return prisma.assignmentSubmission.upsert({
+      where: {
+        assignmentId_studentId: {
+          assignmentId: data.assignmentId,
+          studentId: data.studentId,
+        },
+      },
+      create: {
+        assignmentId: data.assignmentId,
+        studentId: data.studentId,
+        fileUrl: data.fileUrl,
+        fileName: data.fileName || null,
+        fileSize: data.fileSize || null,
+        status: isLate ? 'late' : 'submitted',
+      },
+      update: {
+        fileUrl: data.fileUrl,
+        fileName: data.fileName || null,
+        fileSize: data.fileSize || null,
+        submittedAt: new Date(),
+        status: isLate ? 'late' : 'submitted',
+      },
+      include: {
+        student: { select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true, photoUrl: true } },
+      },
+    });
+  }
+
+  /** List all submissions for an assignment (for teachers to review). */
+  async listSubmissions(assignmentId: number) {
+    const assignment = await prisma.assignment.findUnique({
+      where: { assignmentId },
+      include: {
+        class: {
+          include: {
+            classStudents: {
+              where: { leftAt: null },
+              include: {
+                student: {
+                  select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true, photoUrl: true, gender: true },
+                },
+              },
+            },
+          },
+        },
+        submissions: {
+          include: {
+            student: {
+              select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true, photoUrl: true },
+            },
+            grader: {
+              select: { userId: true, fullNameEn: true, fullNameLo: true },
+            },
+          },
+        },
+      },
+    });
+    if (!assignment) throw Object.assign(new Error('Assignment not found'), { statusCode: 404 });
+
+    type SubmissionItem = (typeof assignment.submissions)[number];
+    const submissionsByStudentId = new Map<number, SubmissionItem>(
+      assignment.submissions.map((s) => [s.studentId, s])
+    );
+
+    // Return all enrolled students in the class with their submission status
+    const allStudents = assignment.class.classStudents.map((cs) => {
+      const sub = submissionsByStudentId.get(cs.studentId);
+      return {
+        student: cs.student,
+        submission: sub || null,
+        isSubmitted: !!sub,
+        status: sub ? sub.status : 'missing',
+      };
+    });
+
+    return {
+      assignment: {
+        assignmentId: assignment.assignmentId,
+        title: assignment.title,
+        dueDate: assignment.dueDate,
+        classId: assignment.classId,
+      },
+      totalStudents: allStudents.length,
+      submittedCount: assignment.submissions.length,
+      gradedCount: assignment.submissions.filter((s) => s.status === 'graded').length,
+      students: allStudents,
+    };
+  }
+
+  /** Grade an assignment submission and notify parents. */
+  async gradeSubmission(submissionId: number, data: { score: number; maxScore?: number; feedback?: string }, gradedBy: number) {
+    const submission = await prisma.assignmentSubmission.findUnique({
+      where: { submissionId },
+      include: {
+        assignment: { select: { title: true } },
+        student: { select: { studentId: true, fullNameEn: true, fullNameLo: true } },
+      },
+    });
+    if (!submission) throw Object.assign(new Error('Submission not found'), { statusCode: 404 });
+
+    const maxScore = data.maxScore ?? (submission.maxScore ? Number(submission.maxScore) : 100);
+    const updated = await prisma.assignmentSubmission.update({
+      where: { submissionId },
+      data: {
+        score: data.score,
+        maxScore,
+        feedback: data.feedback || null,
+        status: 'graded',
+        gradedBy,
+        gradedAt: new Date(),
+      },
+      include: {
+        student: { select: { studentId: true, studentCode: true, fullNameEn: true, fullNameLo: true, photoUrl: true } },
+        grader: { select: { userId: true, fullNameEn: true, fullNameLo: true } },
+      },
+    });
+
+    // Notify parents of the student
+    dispatcher.notifyParents(
+      submission.studentId,
+      'general',
+      `Homework graded: "${submission.assignment.title}" — Score: ${data.score}/${maxScore}${data.feedback ? ` ("${data.feedback}")` : ''}`,
+      `ກວດວຽກບ້ານແລ້ວ: "${submission.assignment.title}" — ຄະແນນ: ${data.score}/${maxScore}${data.feedback ? ` ("${data.feedback}")` : ''}`,
+    ).catch((err) => console.error('[Assignment] Grading notification error:', err));
+
+    return updated;
   }
 
   private async notifyClassParents(a: { classId: number; title: string; dueDate: Date; subject: { subjectNameEn: string; subjectNameLo: string } | null }) {

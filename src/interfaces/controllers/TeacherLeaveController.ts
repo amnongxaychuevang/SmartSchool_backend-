@@ -14,6 +14,16 @@ class TeacherLeaveController {
   async create(req, res, next) {
     try {
       const leave = await teacherLeaveRepository.create(req.user.userId, req.body);
+      const socketManager = req.app.get('socketManager');
+      if (socketManager) {
+        socketManager.broadcast('new-notification', {
+          titleLo: 'ຄຳຂໍລາພັກໃໝ່ຈາກຄູ',
+          titleEn: 'New Teacher Leave Request',
+          messageLo: 'ມີຄຳຂໍລາພັກໃໝ່ຈາກຄູ ລໍຖ້າການອະນຸມັດ',
+          messageEn: 'A teacher submitted a new leave request pending approval',
+          link: '/admin/teacher-leaves',
+        });
+      }
       res.status(201).json({ success: true, data: { leave } });
     } catch (error) {
       next(error);
@@ -55,6 +65,19 @@ class TeacherLeaveController {
         detail: { teacherUserId: leave?.teacherUserId, note: req.body.note || undefined },
         ipAddress: req.ip,
       });
+
+      const socketManager = req.app.get('socketManager');
+      if (socketManager && leave?.teacherUserId) {
+        const isApproved = req.body.status === 'approved';
+        socketManager.toUser(leave.teacherUserId, 'new-notification', {
+          titleLo: isApproved ? 'ຄຳຂໍລາພັກໄດ້ຮັບການອະນຸມັດ' : 'ຄຳຂໍລາພັກຖືກປະຕິເສດ',
+          titleEn: isApproved ? 'Leave Request Approved' : 'Leave Request Rejected',
+          messageLo: `ຄຳຂໍລາພັກຂອງທ່ານໄດ້ຮັບການ${isApproved ? 'ອະນຸມັດ' : 'ປະຕິເສດ'}ແລ້ວ`,
+          messageEn: `Your leave request has been ${req.body.status}`,
+          link: '/teacher/my-leave',
+        });
+      }
+
       res.json({ success: true, data: { leave } });
     } catch (error) {
       next(error);

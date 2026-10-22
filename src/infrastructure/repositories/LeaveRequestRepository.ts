@@ -71,7 +71,7 @@ class LeaveRequestRepository {
       });
       if (!inHomeroom) throw Object.assign(new Error('This student is not in your homeroom class'), { statusCode: 403 });
     }
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       // Conditional update so a request can't be approved twice (or flipped after a decision).
       const claimed = await tx.leaveRequest.updateMany({
         where: { leaveId: id, status: 'pending' },
@@ -91,6 +91,30 @@ class LeaveRequestRepository {
       }
       return request;
     });
+
+    // Notify parent
+    if (updated?.parentUserId) {
+      const studentName = updated.student ? (updated.student.fullNameLo || updated.student.fullNameEn) : 'ນັກຮຽນ';
+      const isApproved = status === 'approved';
+      const start = updated.startDate.toISOString().slice(0, 10);
+      const end = updated.endDate.toISOString().slice(0, 10);
+
+      await prisma.notification.create({
+        data: {
+          recipientUserId: updated.parentUserId,
+          studentId: updated.studentId,
+          type: 'general',
+          channel: 'app_push',
+          titleLo: isApproved ? 'ຄຳຂໍລາພັກໄດ້ຮັບການອະນຸມັດ' : 'ຄຳຂໍລາພັກຖືກປະຕິເສດ',
+          titleEn: isApproved ? 'Leave Request Approved' : 'Leave Request Rejected',
+          messageLo: `ຄຳຂໍລາພັກຂອງ ${studentName} (ວັນທີ ${start} ຫາ ${end}) ໄດ້ຮັບການ${isApproved ? 'ອະນຸມັດ' : 'ປະຕິເສດ'}ແລ້ວ`,
+          messageEn: `Leave request for ${studentName} (${start} to ${end}) was ${status}`,
+          link: '/parent/leave',
+        },
+      }).catch(() => {});
+    }
+
+    return updated;
   }
 }
 

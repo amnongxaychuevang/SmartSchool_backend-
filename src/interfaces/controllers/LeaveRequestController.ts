@@ -33,6 +33,20 @@ class LeaveRequestController {
 
       const homeroomTeacherId = req.user.role === 'teacher' ? req.user.userId : null;
       const result = await leaveRequestRepository.updateStatus(id, status, req.user.userId, homeroomTeacherId);
+
+      const socketManager = req.app.get('socketManager');
+      if (socketManager && result?.parentUserId) {
+        const studentName = result.student ? (result.student.fullNameLo || result.student.fullNameEn) : 'ນັກຮຽນ';
+        const isApproved = status === 'approved';
+        socketManager.toUser(result.parentUserId, 'new-notification', {
+          titleLo: isApproved ? 'ຄຳຂໍລາພັກໄດ້ຮັບການອະນຸມັດ' : 'ຄຳຂໍລາພັກຖືກປະຕິເສດ',
+          titleEn: isApproved ? 'Leave Request Approved' : 'Leave Request Rejected',
+          messageLo: `ຄຳຂໍລາພັກຂອງ ${studentName} ໄດ້ຮັບການ${isApproved ? 'ອະນຸມັດ' : 'ປະຕິເສດ'}ແລ້ວ`,
+          messageEn: `Leave request for ${studentName} has been ${status}`,
+          link: '/parent/leave',
+        });
+      }
+
       res.json({ success: true, data: { request: result } });
     } catch (error) {
       next(error);

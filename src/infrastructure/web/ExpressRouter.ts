@@ -43,12 +43,14 @@ import exportController from '../../interfaces/controllers/ExportController';
 import reportExportController from '../../interfaces/controllers/ReportExportController';
 import teacherLeaveController from '../../interfaces/controllers/TeacherLeaveController';
 import riskAnalyticsController from '../../interfaces/controllers/RiskAnalyticsController';
+import chatController from '../../interfaces/controllers/ChatController';
 
 // Middlewares
 import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
 import validate from '../../interfaces/middlewares/validate';
 import uploadImage from '../../interfaces/middlewares/uploadImage';
 import uploadPdf from '../../interfaces/middlewares/uploadPdf';
+import uploadAssignment from '../../interfaces/middlewares/uploadAssignment';
 import { saveSlip, savePaymentQr } from '../../infrastructure/storage/PhotoStorage';
 import {
   loginSchema, refreshTokenSchema, logoutSchema, attendanceScanSchema,
@@ -320,6 +322,12 @@ router.get('/notifications', AuthMiddleware.verifyToken, AuthMiddleware.authoriz
 router.post('/notifications', AuthMiddleware.verifyToken, AuthMiddleware.authorize('notifications.manage'), validate(notificationCreateSchema), notificationController.create);
 router.put('/notifications/:id/delivered', AuthMiddleware.verifyToken, AuthMiddleware.authorize('notifications.manage'), notificationController.markDelivered);
 
+// User In-App Notifications
+router.get('/notifications/my', AuthMiddleware.verifyToken, notificationController.getMyNotifications);
+router.get('/notifications/unread-count', AuthMiddleware.verifyToken, notificationController.getUnreadCount);
+router.put('/notifications/:id/read', AuthMiddleware.verifyToken, notificationController.markRead);
+router.put('/notifications/read-all', AuthMiddleware.verifyToken, notificationController.markAllRead);
+
 // ─── Spending Limits ────────────────────────────────────
 router.get('/spending-limits/:studentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.view', ['parent']), spendingLimitController.getByStudent);
 router.put('/spending-limits/:studentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.limits_manage'), validate(spendingLimitUpsertSchema), spendingLimitController.upsert);
@@ -425,6 +433,11 @@ router.post('/bus/scan', scanLimiter, validate(busScanSchema), busController.sca
 router.get('/bus/logs', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.view'), busController.listLogs);
 router.get('/bus/manifest', AuthMiddleware.verifyToken, AuthMiddleware.authorize('transport.view'), busController.getLiveManifest);
 
+// Bus Live GPS Tracking
+router.post('/bus/location', AuthMiddleware.verifyToken, busController.recordLocation);
+router.get('/bus/fleet-locations', AuthMiddleware.verifyToken, busController.getFleetLocations);
+router.get('/bus/routes/:routeId/live', AuthMiddleware.verifyToken, busController.getRouteLocation);
+
 // ─── 16. Library Management ─────────────────────────────
 router.get('/library/overview', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.getOverview);
 router.get('/library/categories', AuthMiddleware.verifyToken, AuthMiddleware.authorize('library.view'), libraryController.listCategories);
@@ -463,5 +476,19 @@ router.get('/assignments', AuthMiddleware.verifyToken, AuthMiddleware.authorize(
 router.post('/assignments', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.manage', ['teacher']), validate(assignmentCreateSchema), assignmentController.create);
 router.put('/assignments/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.manage', ['teacher']), validate(assignmentUpdateSchema), assignmentController.update);
 router.delete('/assignments/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.manage', ['teacher']), assignmentController.delete);
+
+// Submissions & Grading
+router.get('/assignments/:id/submissions', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.view', ['teacher']), assignmentController.listSubmissions);
+router.post('/assignments/:id/submit', AuthMiddleware.verifyToken, uploadAssignment('file'), assignmentController.submit);
+router.put('/assignments/submissions/:submissionId/grade', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.manage', ['teacher']), assignmentController.grade);
+router.get('/assignments/student/:studentId', AuthMiddleware.verifyToken, AuthMiddleware.authorize('assignments.view', ['parent']), assignmentController.listForStudent);
+
+// ─── 18. Teacher-Parent Real-Time Chat ──────────────────────────
+router.get('/chat/conversations', AuthMiddleware.verifyToken, chatController.listConversations);
+router.post('/chat/conversations', AuthMiddleware.verifyToken, chatController.getOrCreate);
+router.get('/chat/conversations/:id/messages', AuthMiddleware.verifyToken, chatController.getMessages);
+router.post('/chat/conversations/:id/messages', AuthMiddleware.verifyToken, chatController.sendMessage);
+router.put('/chat/conversations/:id/read', AuthMiddleware.verifyToken, chatController.markRead);
+router.get('/chat/contacts', AuthMiddleware.verifyToken, chatController.getContacts);
 
 export default router;

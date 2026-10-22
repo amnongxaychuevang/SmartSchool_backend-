@@ -418,6 +418,109 @@ export class BusRepository {
       manifest,
     };
   }
+
+  // ─── GPS Live Tracking ──────────────────────────────────
+  async recordLocation(data: {
+    vehicleId: number;
+    routeId?: number;
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    heading?: number;
+  }) {
+    const now = new Date();
+    // 1. Update vehicle current position
+    await prisma.busVehicle.update({
+      where: { vehicleId: data.vehicleId },
+      data: {
+        currentLat: data.latitude,
+        currentLng: data.longitude,
+        speed: data.speed ?? null,
+        heading: data.heading ?? null,
+        lastGpsUpdate: now,
+      },
+    });
+
+    // 2. Append to location history
+    const location = await prisma.busLocation.create({
+      data: {
+        vehicleId: data.vehicleId,
+        routeId: data.routeId ?? null,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        speed: data.speed ?? null,
+        heading: data.heading ?? null,
+        timestamp: now,
+      },
+      include: {
+        vehicle: { select: { plateNumber: true, model: true, driverName: true, driverPhone: true } },
+        route: { select: { routeId: true, routeNameEn: true, routeNameLo: true } },
+      },
+    });
+
+    return location;
+  }
+
+  async getFleetLocations() {
+    return prisma.busVehicle.findMany({
+      where: { status: 'active' },
+      select: {
+        vehicleId: true,
+        plateNumber: true,
+        model: true,
+        driverName: true,
+        driverPhone: true,
+        currentLat: true,
+        currentLng: true,
+        speed: true,
+        heading: true,
+        lastGpsUpdate: true,
+        routes: {
+          where: { isActive: true },
+          select: { routeId: true, routeNameEn: true, routeNameLo: true, stops: true },
+        },
+      },
+    });
+  }
+
+  async getRouteLocation(routeId: number) {
+    const route = await prisma.busRoute.findUnique({
+      where: { routeId },
+      include: {
+        vehicle: true,
+      },
+    });
+
+    if (!route || !route.vehicle) return null;
+
+    // Get last 20 location breadcrumbs
+    const history = await prisma.busLocation.findMany({
+      where: { vehicleId: route.vehicle.vehicleId },
+      orderBy: { timestamp: 'desc' },
+      take: 20,
+    });
+
+    return {
+      route,
+      vehicle: route.vehicle,
+      currentLocation: route.vehicle.currentLat && route.vehicle.currentLng ? {
+        latitude: route.vehicle.currentLat,
+        longitude: route.vehicle.currentLng,
+        speed: route.vehicle.speed,
+        heading: route.vehicle.heading,
+        lastGpsUpdate: route.vehicle.lastGpsUpdate,
+      } : null,
+      history: history.reverse(),
+    };
+  }
+
+  async getLocationHistory(vehicleId: number, limit = 50) {
+    return prisma.busLocation.findMany({
+      where: { vehicleId },
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+    });
+  }
 }
 
 export default new BusRepository();

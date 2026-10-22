@@ -153,6 +153,61 @@ class BusController {
       next(error);
     }
   }
+
+  // ─── GPS Live Tracking ──────────────────────────────────
+  async recordLocation(req: any, res: any, next: any) {
+    try {
+      const { vehicleId, routeId, latitude, longitude, speed, heading } = req.body;
+      if (!vehicleId || latitude == null || longitude == null) {
+        return res.status(400).json({ success: false, message: 'vehicleId, latitude, and longitude are required' });
+      }
+
+      const location = await busRepository.recordLocation({
+        vehicleId: Number(vehicleId),
+        routeId: routeId ? Number(routeId) : undefined,
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        speed: speed != null ? parseFloat(speed) : undefined,
+        heading: heading != null ? parseFloat(heading) : undefined,
+      });
+
+      const socketManager = req.app.get('socketManager');
+      if (socketManager) {
+        // Broadcast to fleet subscribers
+        socketManager.broadcast('bus:location-update', location);
+        // Also emit to specific route room
+        if (location.routeId) {
+          socketManager.toRoom(`bus:${location.routeId}`, 'bus:location-update', location);
+        }
+      }
+
+      res.status(201).json({ success: true, data: { location } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getFleetLocations(req: any, res: any, next: any) {
+    try {
+      const fleet = await busRepository.getFleetLocations();
+      res.json({ success: true, data: { fleet } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getRouteLocation(req: any, res: any, next: any) {
+    try {
+      const { routeId } = req.params;
+      const data = await busRepository.getRouteLocation(Number(routeId));
+      if (!data) {
+        return res.status(404).json({ success: false, message: 'Route or vehicle not found' });
+      }
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export default new BusController();

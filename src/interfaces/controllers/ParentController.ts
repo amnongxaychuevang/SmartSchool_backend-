@@ -249,6 +249,22 @@ class ParentController {
       const parentUserId = req.user.userId;
       const { studentId } = req.params;
       const leave = await parentRepository.createLeaveRequest(studentId, parentUserId, req.body);
+
+      const socketManager = req.app.get('socketManager');
+      if (socketManager) {
+        const homeroomTeacherId = leave.student?.classStudents?.[0]?.class?.homeroomTeacherId;
+        if (homeroomTeacherId) {
+          const studentName = leave.student.fullNameLo || leave.student.fullNameEn;
+          socketManager.toUser(homeroomTeacherId, 'new-notification', {
+            titleLo: 'ຄຳຂໍລາພັກຂອງນັກຮຽນ',
+            titleEn: 'Student Leave Request',
+            messageLo: `ນັກຮຽນ ${studentName} ສົ່ງຄຳຂໍລາພັກ ລໍຖ້າການອະນຸມັດ`,
+            messageEn: `Student ${studentName} submitted a leave request pending approval`,
+            link: '/teacher/leaves',
+          });
+        }
+      }
+
       res.json({ success: true, data: leave });
     } catch (error) {
       next(error);

@@ -273,7 +273,7 @@ class ParentRepository {
     });
     if (!link) throw Object.assign(new Error('Unauthorized'), { statusCode: 403 });
 
-    return prisma.leaveRequest.create({
+    const created = await prisma.leaveRequest.create({
       data: {
         studentId: parseInt(studentId),
         parentUserId: parseInt(parentUserId),
@@ -282,8 +282,49 @@ class ParentRepository {
         reason: data.reason,
         documentUrl: data.documentUrl,
         status: 'pending'
+      },
+      include: {
+        student: {
+          select: {
+            fullNameLo: true,
+            fullNameEn: true,
+            studentCode: true,
+            classStudents: {
+              where: { leftAt: null },
+              take: 1,
+              orderBy: { enrolledAt: 'desc' },
+              include: { class: { select: { classNameLo: true, classNameEn: true, homeroomTeacherId: true } } }
+            }
+          }
+        }
       }
     });
+
+    // Notify homeroom teacher
+    const classStudent = created.student?.classStudents?.[0];
+    const homeroomTeacherId = classStudent?.class?.homeroomTeacherId;
+    if (homeroomTeacherId) {
+      const studentName = created.student.fullNameLo || created.student.fullNameEn;
+      const className = classStudent.class.classNameLo || classStudent.class.classNameEn;
+      const start = created.startDate.toISOString().slice(0, 10);
+      const end = created.endDate.toISOString().slice(0, 10);
+
+      await prisma.notification.create({
+        data: {
+          recipientUserId: homeroomTeacherId,
+          studentId: parseInt(studentId),
+          type: 'general',
+          channel: 'app_push',
+          titleLo: 'ຄຳຂໍລາພັກຂອງນັກຮຽນ',
+          titleEn: 'Student Leave Request',
+          messageLo: `ນັກຮຽນ ${studentName} (${className}) ຂໍລາພັກ ວັນທີ ${start} ຫາ ${end}`,
+          messageEn: `Student ${studentName} (${className}) requested leave from ${start} to ${end}`,
+          link: '/teacher/leaves',
+        }
+      }).catch(() => {});
+    }
+
+    return created;
   }
 
   async getSpendingLimits(studentId, parentUserId) {

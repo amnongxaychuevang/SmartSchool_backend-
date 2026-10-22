@@ -81,11 +81,15 @@ model User {
   createdAnnouncements  Announcement[]      @relation("AnnouncementCreator")
   createdEvents         SchoolEvent[]       @relation("SchoolEventCreator")
   createdAssignments    Assignment[]        @relation("AssignmentCreator")
+  gradedSubmissions     AssignmentSubmission[] @relation("AssignmentSubmissionGrader")
   teacher               Teacher?
   parent                Parent?
   refreshTokens         RefreshToken[]      @relation("UserRefreshTokens")
   auditLogs             AuditLog[]          @relation("AuditLogUser")
   passwordResetCodes    PasswordResetCode[]
+  teacherConversations  ChatConversation[]  @relation("TeacherConversations")
+  parentConversations   ChatConversation[]  @relation("ParentConversations")
+  sentChatMessages      ChatMessage[]       @relation("SentChatMessages")
 
   recordedAttendance DailyAttendance[] @relation("DailyAttendanceRecorder")
 
@@ -319,8 +323,10 @@ model Student {
   busStudent      BusStudent?
   busLogs         BusLog[]
   bookLoans       BookLoan[]
-  riskAssessments StudentRiskAssessment[]
-  interventions   RiskIntervention[]
+  riskAssessments       StudentRiskAssessment[]
+  interventions         RiskIntervention[]
+  assignmentSubmissions AssignmentSubmission[]
+  chatConversations     ChatConversation[]
 
   @@index([status])
   @@map("students")
@@ -750,6 +756,11 @@ model Notification {
   messageLo       String              @map("message_lo") @db.Text
   sentAt          DateTime            @default(now()) @map("sent_at")
   deliveredAt     DateTime?           @map("delivered_at")
+  readAt          DateTime?           @map("read_at")
+  isRead          Boolean             @default(false) @map("is_read")
+  titleEn         String?             @map("title_en") @db.VarChar(150)
+  titleLo         String?             @map("title_lo") @db.VarChar(150)
+  link            String?             @db.VarChar(255)
   status          NotificationStatus  @default(pending)
   errorMessage    String?             @map("error_message") @db.Text
 
@@ -1087,9 +1098,35 @@ model Assignment {
   class   Class    @relation(fields: [classId], references: [classId], onDelete: Cascade)
   subject Subject? @relation(fields: [subjectId], references: [subjectId], onDelete: SetNull)
   creator User?    @relation("AssignmentCreator", fields: [createdBy], references: [userId], onDelete: SetNull)
+  submissions AssignmentSubmission[]
 
   @@index([classId, dueDate])
   @@map("assignments")
+}
+
+model AssignmentSubmission {
+  submissionId Int       @id @default(autoincrement()) @map("submission_id")
+  assignmentId Int       @map("assignment_id")
+  studentId    Int       @map("student_id")
+  fileUrl      String    @map("file_url") @db.VarChar(255)
+  fileName     String?   @map("file_name") @db.VarChar(255)
+  fileSize     Int?      @map("file_size")
+  submittedAt  DateTime  @default(now()) @map("submitted_at")
+  status       String    @default("submitted") @db.VarChar(30) // submitted, graded, late
+  score        Decimal?  @db.Decimal(5, 2)
+  maxScore     Decimal?  @default(100) @map("max_score") @db.Decimal(5, 2)
+  feedback     String?   @db.Text
+  gradedBy     Int?      @map("graded_by")
+  gradedAt     DateTime? @map("graded_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [assignmentId], onDelete: Cascade)
+  student    Student    @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  grader     User?      @relation("AssignmentSubmissionGrader", fields: [gradedBy], references: [userId], onDelete: SetNull)
+
+  @@unique([assignmentId, studentId])
+  @@index([assignmentId, status])
+  @@index([studentId])
+  @@map("assignment_submissions")
 }
 
 // ─── 14. Behavior & Discipline (ພຶດຕິກຳ ແລະ ວິໄນ) ───────────
@@ -1144,13 +1181,19 @@ model BusVehicle {
   capacity    Int       @default(15)
   driverName  String    @map("driver_name") @db.VarChar(100)
   driverPhone String    @map("driver_phone") @db.VarChar(50)
-  status      String    @default("active") @db.VarChar(30) // active, maintenance, inactive
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime? @updatedAt @map("updated_at")
+  status        String        @default("active") @db.VarChar(30) // active, maintenance, inactive
+  currentLat    Float?        @map("current_lat") @db.Double
+  currentLng    Float?        @map("current_lng") @db.Double
+  speed         Float?        @db.Float
+  heading       Float?        @db.Float
+  lastGpsUpdate DateTime?     @map("last_gps_update")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime?     @updatedAt @map("updated_at")
 
-  routes      BusRoute[]
-  busStudents BusStudent[]
-  busLogs     BusLog[]
+  routes        BusRoute[]
+  busStudents   BusStudent[]
+  busLogs       BusLog[]
+  busLocations  BusLocation[]
 
   @@map("bus_vehicles")
 }
@@ -1167,8 +1210,9 @@ model BusRoute {
   updatedAt   DateTime? @updatedAt @map("updated_at")
 
   vehicle     BusVehicle?  @relation(fields: [vehicleId], references: [vehicleId], onDelete: SetNull)
-  busStudents BusStudent[]
-  busLogs     BusLog[]
+  busStudents  BusStudent[]
+  busLogs      BusLog[]
+  busLocations BusLocation[]
 
   @@map("bus_routes")
 }
@@ -1303,4 +1347,62 @@ model RiskIntervention {
 
   @@index([studentId, status])
   @@map("risk_interventions")
+}
+
+// ─── Live Bus GPS Tracking ──────────────────────────────────
+model BusLocation {
+  locationId Int       @id @default(autoincrement()) @map("location_id")
+  vehicleId  Int       @map("vehicle_id")
+  routeId    Int?      @map("route_id")
+  latitude   Float     @db.Double
+  longitude  Float     @db.Double
+  speed      Float?    @db.Float
+  heading    Float?    @db.Float
+  timestamp  DateTime  @default(now())
+
+  vehicle    BusVehicle @relation(fields: [vehicleId], references: [vehicleId], onDelete: Cascade)
+  route      BusRoute?  @relation(fields: [routeId], references: [routeId], onDelete: SetNull)
+
+  @@index([vehicleId, timestamp])
+  @@index([routeId, timestamp])
+  @@map("bus_locations")
+}
+
+// ─── Teacher-Parent Real-Time Chat ──────────────────────────
+model ChatConversation {
+  conversationId Int      @id @default(autoincrement()) @map("conversation_id")
+  teacherId      Int      @map("teacher_id")
+  parentId       Int      @map("parent_id")
+  studentId      Int?     @map("student_id")
+  lastMessage    String?  @map("last_message") @db.Text
+  lastMessageAt  DateTime @default(now()) @map("last_message_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  teacher  User          @relation("TeacherConversations", fields: [teacherId], references: [userId], onDelete: Cascade)
+  parent   User          @relation("ParentConversations", fields: [parentId], references: [userId], onDelete: Cascade)
+  student  Student?      @relation(fields: [studentId], references: [studentId], onDelete: SetNull)
+  messages ChatMessage[]
+
+  @@unique([teacherId, parentId, studentId])
+  @@index([teacherId])
+  @@index([parentId])
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  messageId      Int       @id @default(autoincrement()) @map("message_id")
+  conversationId Int       @map("conversation_id")
+  senderId       Int       @map("sender_id")
+  content        String    @db.Text
+  attachmentUrl  String?   @map("attachment_url") @db.VarChar(255)
+  isRead         Boolean   @default(false) @map("is_read")
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [conversationId], onDelete: Cascade)
+  sender       User             @relation("SentChatMessages", fields: [senderId], references: [userId], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
 }
