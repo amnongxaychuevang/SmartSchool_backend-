@@ -3,11 +3,12 @@ import notificationRepository from '../../infrastructure/repositories/Notificati
 class NotificationController {
   async list(req, res, next) {
     try {
-      const { recipientUserId, studentId, status, page = 1, limit = 30 } = req.query;
+      const { recipientUserId, studentId, status, search, page = 1, limit = 30 } = req.query;
       const result = await notificationRepository.findMany({
         recipientUserId,
         studentId,
         status,
+        search: typeof search === 'string' ? search : undefined,
         page: parseInt(page),
         limit: parseInt(limit),
       });

@@ -65,13 +65,15 @@ export class BehaviorRepository {
         },
       };
     }
-    if (query.search) {
+    const q = typeof query.search === 'string' ? query.search.trim() : undefined;
+    if (q) {
       where.OR = [
-        { titleEn: { contains: query.search } },
-        { titleLo: { contains: query.search } },
-        { student: { fullNameEn: { contains: query.search } } },
-        { student: { fullNameLo: { contains: query.search } } },
-        { student: { studentCode: { contains: query.search } } },
+        { titleEn: { contains: q } },
+        { titleLo: { contains: q } },
+        { description: { contains: q } },
+        { student: { fullNameEn: { contains: q } } },
+        { student: { fullNameLo: { contains: q } } },
+        { student: { studentCode: { contains: q } } },
       ];
     }
 
@@ -107,6 +109,10 @@ export class BehaviorRepository {
 
     return {
       records,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
       pagination: {
         total,
         page,

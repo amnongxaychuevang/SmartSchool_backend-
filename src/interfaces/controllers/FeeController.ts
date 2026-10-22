@@ -21,7 +21,12 @@ const FeeController = {
 
   // ── Fee types ──
   async listTypes(req, res) {
-    res.json({ success: true, data: { feeTypes: await feeRepository.listTypes() } });
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const page = req.query.page ? Math.max(1, parseInt(String(req.query.page), 10) || 1) : undefined;
+    const limit = req.query.limit ? Math.max(1, Math.min(100, parseInt(String(req.query.limit), 10) || 10)) : undefined;
+
+    const result = await feeRepository.listTypes({ search }, page, limit);
+    res.json({ success: true, data: result });
   },
   async createType(req, res) {
     const feeType = await feeRepository.createType(req.body);
@@ -42,7 +47,12 @@ const FeeController = {
   // ── Fee structures ──
   async listStructures(req, res) {
     const academicYear = typeof req.query.academicYear === 'string' ? req.query.academicYear : undefined;
-    res.json({ success: true, data: { structures: await feeRepository.listStructures(academicYear) } });
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const page = req.query.page ? Math.max(1, parseInt(String(req.query.page), 10) || 1) : undefined;
+    const limit = req.query.limit ? Math.max(1, Math.min(100, parseInt(String(req.query.limit), 10) || 10)) : undefined;
+
+    const result = await feeRepository.listStructures({ academicYear, search }, page, limit);
+    res.json({ success: true, data: result });
   },
   async createStructure(req, res) {
     const structure = await feeRepository.createStructure({ ...req.body, createdBy: req.user.userId });

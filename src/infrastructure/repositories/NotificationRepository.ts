@@ -1,12 +1,23 @@
 import prisma from '../database/PrismaClient';
 
 class NotificationRepository {
-  async findMany({ recipientUserId, studentId, status, page = 1, limit = 30 }: any = {}) {
+  async findMany({ recipientUserId, studentId, status, search, page = 1, limit = 30 }: any = {}) {
     const skip = (page - 1) * limit;
+    const q = typeof search === 'string' ? search.trim() : undefined;
     const where = {
       ...(recipientUserId ? { recipientUserId: parseInt(recipientUserId) } : {}),
       ...(studentId ? { studentId: parseInt(studentId) } : {}),
       ...(status ? { status } : {}),
+      ...(q ? {
+        OR: [
+          { messageEn: { contains: q } },
+          { messageLo: { contains: q } },
+          { titleEn: { contains: q } },
+          { titleLo: { contains: q } },
+          { recipient: { fullNameEn: { contains: q } } },
+          { recipient: { fullNameLo: { contains: q } } },
+        ],
+      } : {}),
     };
 
     const [notifications, total] = await Promise.all([

@@ -77,8 +77,34 @@ function invoiceWhere(f: InvoiceFilter): Prisma.InvoiceWhereInput {
 
 class FeeRepository {
   // ── Fee types ──
-  listTypes() {
-    return prisma.feeType.findMany({ orderBy: [{ isActive: 'desc' }, { nameEn: 'asc' }], include: { _count: { select: { structures: true } } } });
+  async listTypes(filter?: { search?: string }, page?: number, limit?: number) {
+    const q = filter?.search?.trim();
+    const where: Prisma.FeeTypeWhereInput = q ? {
+      OR: [
+        { nameEn: { contains: q } },
+        { nameLo: { contains: q } },
+        { descriptionEn: { contains: q } },
+        { descriptionLo: { contains: q } },
+      ],
+    } : {};
+
+    const isPaged = page !== undefined && limit !== undefined;
+    const [feeTypes, total] = await Promise.all([
+      prisma.feeType.findMany({
+        where,
+        orderBy: [{ isActive: 'desc' }, { nameEn: 'asc' }],
+        include: { _count: { select: { structures: true } } },
+        ...(isPaged ? { skip: (page - 1) * limit, take: limit } : {}),
+      }),
+      prisma.feeType.count({ where }),
+    ]);
+
+    return {
+      feeTypes,
+      total,
+      page: page ?? 1,
+      limit: limit ?? total,
+    };
   }
 
   createType(data: Prisma.FeeTypeCreateInput) {
@@ -96,30 +122,63 @@ class FeeRepository {
   }
 
   // ── Fee structures ──
-  async listStructures(academicYear?: string) {
-    const structures = await prisma.feeStructure.findMany({
-      where: academicYear ? { academicYear } : {},
-      orderBy: [{ academicYear: 'desc' }, { dueDate: 'asc' }],
-      include: {
-        feeType: { select: { feeTypeId: true, nameEn: true, nameLo: true } },
-        term: { select: { termId: true, termNameEn: true, termNameLo: true } },
-        class: { select: { classId: true, classNameEn: true, classNameLo: true } },
-      },
-    });
+  async listStructures(filter?: { academicYear?: string; search?: string }, page?: number, limit?: number) {
+    const q = filter?.search?.trim();
+    const where: Prisma.FeeStructureWhereInput = {
+      ...(filter?.academicYear ? { academicYear: filter.academicYear } : {}),
+      ...(q ? {
+        OR: [
+          { feeType: { nameEn: { contains: q } } },
+          { feeType: { nameLo: { contains: q } } },
+          { term: { termNameEn: { contains: q } } },
+          { term: { termNameLo: { contains: q } } },
+          { class: { classNameEn: { contains: q } } },
+          { class: { classNameLo: { contains: q } } },
+          { academicYear: { contains: q } },
+        ],
+      } : {}),
+    };
+
+    const isPaged = page !== undefined && limit !== undefined;
+    const [structures, total] = await Promise.all([
+      prisma.feeStructure.findMany({
+        where,
+        orderBy: [{ academicYear: 'desc' }, { dueDate: 'asc' }],
+        include: {
+          feeType: { select: { feeTypeId: true, nameEn: true, nameLo: true } },
+          term: { select: { termId: true, termNameEn: true, termNameLo: true } },
+          class: { select: { classId: true, classNameEn: true, classNameLo: true } },
+        },
+        ...(isPaged ? { skip: (page - 1) * limit, take: limit } : {}),
+      }),
+      prisma.feeStructure.count({ where }),
+    ]);
+
     const totals = await prisma.invoice.groupBy({
       by: ['feeStructureId'],
       where: { feeStructureId: { in: structures.map((s) => s.feeStructureId) }, status: { not: 'void' } },
       _count: { _all: true },
       _sum: { amount: true, discount: true, paidAmount: true },
     });
-    return structures.map((s) => {
+
+    const mapped = structures.map((s) => {
       const t = totals.find((x) => x.feeStructureId === s.feeStructureId);
       const billed = num(t?._sum.amount) - num(t?._sum.discount);
       return {
-        ...s, amount: num(s.amount),
-        invoiceCount: t?._count._all ?? 0, billed, collected: num(t?._sum.paidAmount),
+        ...s,
+        amount: num(s.amount),
+        invoiceCount: t?._count._all ?? 0,
+        billed,
+        collected: num(t?._sum.paidAmount),
       };
     });
+
+    return {
+      structures: mapped,
+      total,
+      page: page ?? 1,
+      limit: limit ?? total,
+    };
   }
 
   createStructure(data: Prisma.FeeStructureUncheckedCreateInput) {
