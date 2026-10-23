@@ -33,6 +33,7 @@ import reportController from '../../interfaces/controllers/ReportController';
 import feeController from '../../interfaces/controllers/FeeController';
 import promotionController from '../../interfaces/controllers/PromotionController';
 import schoolEventController from '../../interfaces/controllers/SchoolEventController';
+import announcementController from '../../interfaces/controllers/AnnouncementController';
 import receiptController from '../../interfaces/controllers/ReceiptController';
 import behaviorController from '../../interfaces/controllers/BehaviorController';
 import busController from '../../interfaces/controllers/BusController';
@@ -46,6 +47,9 @@ import riskAnalyticsController from '../../interfaces/controllers/RiskAnalyticsC
 import chatController from '../../interfaces/controllers/ChatController';
 import payrollController from '../../interfaces/controllers/PayrollController';
 import expenseController from '../../interfaces/controllers/ExpenseController';
+import importController, { uploadFile } from '../../interfaces/controllers/ImportController';
+import backupController from '../../interfaces/controllers/BackupController';
+import summerController from '../../interfaces/controllers/SummerController';
 
 // Middlewares
 import AuthMiddleware from '../../interfaces/middlewares/AuthMiddleware';
@@ -89,6 +93,7 @@ import {
   generatePayrollSchema, updatePayrollItemSchema, updatePayrollPeriodStatusSchema,
   expenseCategoryCreateSchema, expenseCategoryUpdateSchema,
   expenseCreateSchema, expenseUpdateSchema,
+  summerCourseCreateSchema, summerCourseUpdateSchema, summerRegisterSchema,
 } from '../../interfaces/validators/schemas';
 
 // Strict limiter for credential-guessing-prone / abuse-prone endpoints.
@@ -148,6 +153,7 @@ router.get('/ethnicities', AuthMiddleware.verifyToken, ethnicityController.list)
 router.get('/provinces', AuthMiddleware.verifyToken, provinceController.list);
 
 router.get('/students/export', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.export'), exportController.students);
+router.post('/import/students', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.manage'), uploadFile, importController.importStudents);
 router.get('/students', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.list);
 router.get('/students/meta/statuses', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.getStatuses);
 router.get('/students/meta/blood-types', AuthMiddleware.verifyToken, AuthMiddleware.authorize('students.view', ['teacher']), studentController.getBloodTypes);
@@ -174,6 +180,7 @@ router.delete('/roles/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize
 
 // ─── Teachers (Admin) ───────────────────────────────────
 router.get('/teachers/export', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.export'), exportController.teachers);
+router.post('/import/teachers', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), uploadFile, importController.importTeachers);
 router.get('/teachers', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.view'), teacherController.list);
 router.post('/teachers', AuthMiddleware.verifyToken, AuthMiddleware.authorize('teachers.manage'), validate(teacherCreateSchema), teacherController.create);
 router.get('/teachers/options', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['academics.manage', 'teachers.view']), teacherController.options);
@@ -189,6 +196,7 @@ router.delete('/teachers/:id/documents/:documentId', AuthMiddleware.verifyToken,
 
 // ─── Parents (Admin) ────────────────────────────────────
 router.get('/parents/export', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.export'), exportController.parents);
+router.post('/import/parents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.manage'), uploadFile, importController.importParents);
 router.get('/parents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.view'), parentController.list);
 router.get('/parents/options', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['students.manage', 'parents.view']), parentController.options);
 router.post('/parents', AuthMiddleware.verifyToken, AuthMiddleware.authorize('parents.manage'), validate(parentCreateSchema), parentController.create);
@@ -358,8 +366,12 @@ router.post('/settings/payment-qr', AuthMiddleware.verifyToken, AuthMiddleware.a
   }
 });
 
+// ─── Database Backups (Admin) ─────────────────────────────
+router.get('/settings/backups', AuthMiddleware.verifyToken, AuthMiddleware.authorize('settings.manage'), backupController.listBackups);
+router.post('/settings/backups/run', AuthMiddleware.verifyToken, AuthMiddleware.authorize('settings.manage'), backupController.runBackup);
+router.get('/settings/backups/:fileName/download', AuthMiddleware.verifyToken, AuthMiddleware.authorize('settings.manage'), backupController.downloadBackup);
+
 // ─── Announcements (Admin/Teacher) ────────────────────────
-import announcementController from '../../interfaces/controllers/AnnouncementController';
 router.get('/announcements', AuthMiddleware.verifyToken, announcementController.list);
 router.get('/announcements/:id', AuthMiddleware.verifyToken, announcementController.get);
 router.post('/announcements', AuthMiddleware.verifyToken, AuthMiddleware.authorize('announcements.manage', ['teacher']), validate(announcementCreateSchema), announcementController.create);
@@ -536,4 +548,16 @@ router.delete('/expenses/:id', AuthMiddleware.verifyToken, AuthMiddleware.author
 router.post('/expenses/:id/receipt', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), uploadImage('receipt'), expenseController.uploadReceipt);
 router.delete('/expenses/:id/receipt', AuthMiddleware.verifyToken, AuthMiddleware.authorize('finance.manage'), expenseController.deleteReceipt);
 
+// ─── 21. Summer Extra Classes ──────────────────────────────
+router.get('/summer/courses', AuthMiddleware.verifyToken, summerController.listCourses);
+router.post('/summer/courses', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['academics.manage', 'fees.manage']), validate(summerCourseCreateSchema), summerController.createCourse);
+router.put('/summer/courses/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['academics.manage', 'fees.manage']), validate(summerCourseUpdateSchema), summerController.updateCourse);
+router.delete('/summer/courses/:id', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['academics.manage', 'fees.manage']), summerController.deleteCourse);
+
+router.get('/summer/registrations', AuthMiddleware.verifyToken, summerController.listRegistrations);
+router.get('/summer/registrations/:id', AuthMiddleware.verifyToken, summerController.getRegistration);
+router.post('/summer/registrations', AuthMiddleware.verifyToken, AuthMiddleware.authorize(['academics.manage', 'fees.manage', 'fees.collect']), validate(summerRegisterSchema), summerController.register);
+router.get('/summer/stats', AuthMiddleware.verifyToken, summerController.getStats);
+
 export default router;
+

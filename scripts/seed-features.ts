@@ -218,6 +218,25 @@ async function main() {
     console.log('Sample student bus & behavior assigned ✓');
   }
 
+  // 6. Summer Courses Seed
+  const summerCourses = [
+    { academicYear: '2025-2026', subjectNameLo: 'ຄະນິດສາດ (Mathematics)', subjectNameEn: 'Mathematics', gradeLevel: 'ປ.1 - ປ.5', monthlyFee: 200000, teacherName: 'ອາຈານ ສົມສັກ', roomNumber: 'ຫ້ອງ 201', timeSlot: '08:30 - 10:00 (ຈັນ - ສຸກ)' },
+    { academicYear: '2025-2026', subjectNameLo: 'ພາສາລາວ (Lao Language)', subjectNameEn: 'Lao Language', gradeLevel: 'ປ.1 - ປ.5', monthlyFee: 180000, teacherName: 'ອາຈານ ບົວຄຳ', roomNumber: 'ຫ້ອງ 202', timeSlot: '10:15 - 11:45 (ຈັນ - ສຸກ)' },
+    { academicYear: '2025-2026', subjectNameLo: 'ພາສາອັງກິດ (English for Kids)', subjectNameEn: 'English for Kids', gradeLevel: 'ທຸກລະດັບ', monthlyFee: 250000, teacherName: 'Teacher Johnny', roomNumber: 'ຫ້ອງ 103', timeSlot: '13:30 - 15:00 (ຈັນ - ສຸກ)' },
+    { academicYear: '2025-2026', subjectNameLo: 'ວິທະຍາສາດ ແລະ ການທົດລອງ (Fun Science)', subjectNameEn: 'Fun Science', gradeLevel: 'ປ.3 - ມ.2', monthlyFee: 200000, teacherName: 'ອາຈານ ວຽງໄຊ', roomNumber: 'ຫ້ອງ Lab 1', timeSlot: '15:15 - 16:45 (ຈັນ - ສຸກ)' },
+    { academicYear: '2025-2026', subjectNameLo: 'ສິລະປະ ແລະ ແຕ້ມຮູບ (Arts & Crafts)', subjectNameEn: 'Arts & Crafts', gradeLevel: 'ອະນຸບານ - ປະຖົມ', monthlyFee: 180000, teacherName: 'ອາຈານ ມະລິ', roomNumber: 'ຫ້ອງ ສິລະປະ', timeSlot: '10:00 - 11:30 (ຈັນ - ສຸກ)' },
+  ];
+
+  for (const c of summerCourses) {
+    const existing = await prisma.summerCourse.findFirst({
+      where: { subjectNameEn: c.subjectNameEn, academicYear: c.academicYear },
+    });
+    if (!existing) {
+      await prisma.summerCourse.create({ data: c });
+    }
+  }
+  console.log('Summer courses seeded ✓');
+
   console.log('All feature seeds completed successfully! 🎉');
 }
 

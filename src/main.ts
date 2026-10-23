@@ -13,6 +13,7 @@ import ErrorHandler from './interfaces/middlewares/ErrorHandler';
 import { UPLOAD_ROOT, UPLOAD_URL_PREFIX } from './infrastructure/storage/PhotoStorage';
 import { startAutoAbsenceJob } from './infrastructure/jobs/AutoAbsenceJob';
 import { startFeeReminderJob } from './infrastructure/jobs/FeeReminderJob';
+import { startDatabaseBackupJob } from './infrastructure/jobs/DatabaseBackupJob';
 
 const app = express();
 const server = http.createServer(app);
@@ -93,3 +94,4 @@ server.listen(PORT, () => {
 
 startAutoAbsenceJob();
 startFeeReminderJob();
+startDatabaseBackupJob();

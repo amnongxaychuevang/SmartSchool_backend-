@@ -88,11 +88,7 @@ async function backup(dir) {
 }
 
 async function main() {
-  const dir = process.env.BACKUP_DIR;
-  if (!dir) {
-    console.error('BACKUP_DIR is not set in backend/.env (e.g. BACKUP_DIR=D:\\backups\\smart-school)');
-    process.exit(1);
-  }
+  const dir = process.env.BACKUP_DIR || path.join(__dirname, '../backups');
 
   try {
     const file = await backup(dir);
@@ -115,4 +111,4 @@ async function main() {
 
 if (require.main === module) main();
 
-module.exports = { backup };
+module.exports = { backup, applyRetention, policy, stamp, readTail };

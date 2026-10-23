@@ -103,6 +103,7 @@ model User {
   processedLoans      BookLoan[]         @relation("BookLoanProcessor")
   actionInterventions RiskIntervention[] @relation("InterventionActor")
   recordedExpenses    Expense[]          @relation("ExpenseRecorder")
+  recordedSummerRegs  SummerRegistration[] @relation("SummerRegistrationRecorder")
 
   @@index([roleId])
   @@map("users")
@@ -1542,4 +1543,86 @@ model PayrollItem {
   @@index([periodId])
   @@map("payroll_items")
 }
+
+// ─── Summer Extra Classes (ຫຼັກສູດຮຽນເສີມພາກລະດູຮ້ອນ) ─────────────
+model SummerCourse {
+  courseId      Int       @id @default(autoincrement()) @map("course_id")
+  academicYear  String    @map("academic_year") @db.VarChar(9)
+  subjectNameEn String    @map("subject_name_en") @db.VarChar(100)
+  subjectNameLo String    @map("subject_name_lo") @db.VarChar(100)
+  gradeLevel    String?   @map("grade_level") @db.VarChar(50)
+  monthlyFee    Decimal   @map("monthly_fee") @db.Decimal(12, 2)
+  teacherName   String?   @map("teacher_name") @db.VarChar(100)
+  roomNumber    String?   @map("room_number") @db.VarChar(50)
+  timeSlot      String?   @map("time_slot") @db.VarChar(100)
+  description   String?   @db.Text
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime? @updatedAt @map("updated_at")
+
+  items SummerRegistrationItem[]
+
+  @@map("summer_courses")
+}
+
+model SummerStudent {
+  studentId   Int       @id @default(autoincrement()) @map("student_id")
+  studentCode String    @unique @map("student_code") @db.VarChar(30)
+  fullNameEn  String    @map("full_name_en") @db.VarChar(150)
+  fullNameLo  String    @map("full_name_lo") @db.VarChar(150)
+  gender      String?   @db.VarChar(10) // male, female, other
+  dateOfBirth DateTime? @map("date_of_birth") @db.Date
+  parentName  String    @map("parent_name") @db.VarChar(150)
+  phoneNumber String    @map("phone_number") @db.VarChar(30)
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  registrations SummerRegistration[]
+
+  @@map("summer_students")
+}
+
+model SummerRegistration {
+  registrationId Int       @id @default(autoincrement()) @map("registration_id")
+  regNo          String    @unique @map("reg_no") @db.VarChar(50)
+  studentId      Int       @map("student_id")
+  academicYear   String    @map("academic_year") @db.VarChar(9)
+  monthsEnrolled Json      @map("months_enrolled") // [1], [1, 2], [1, 2, 3]
+  totalAmount    Decimal   @map("total_amount") @db.Decimal(12, 2)
+  paidAmount     Decimal   @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  paymentMethod  String    @default("cash") @map("payment_method") @db.VarChar(30) // cash, bank_transfer
+  paymentStatus  String    @default("paid") @map("payment_status") @db.VarChar(20) // paid, partial, unpaid
+  receiptNo      String?   @unique @map("receipt_no") @db.VarChar(50)
+  paidAt         DateTime? @map("paid_at")
+  notes          String?   @db.Text
+  recordedBy     Int?      @map("recorded_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+
+  student        SummerStudent            @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  recorder       User?                    @relation("SummerRegistrationRecorder", fields: [recordedBy], references: [userId], onDelete: SetNull)
+  items          SummerRegistrationItem[]
+
+  @@index([studentId])
+  @@index([paymentStatus])
+  @@index([academicYear])
+  @@map("summer_registrations")
+}
+
+model SummerRegistrationItem {
+  itemId         Int      @id @default(autoincrement()) @map("item_id")
+  registrationId Int      @map("registration_id")
+  courseId       Int      @map("course_id")
+  monthNumber    Int      @map("month_number") // 1, 2, or 3
+  courseFee      Decimal  @map("course_fee") @db.Decimal(12, 2)
+
+  registration   SummerRegistration @relation(fields: [registrationId], references: [registrationId], onDelete: Cascade)
+  course         SummerCourse       @relation(fields: [courseId], references: [courseId], onDelete: Restrict)
+
+  @@index([registrationId])
+  @@index([courseId])
+  @@map("summer_registration_items")
+}
+
 

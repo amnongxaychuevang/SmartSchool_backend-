@@ -126,7 +126,13 @@ class ParentRepository {
     const parentStudents = await prisma.parentStudent.findMany({
       where: { parentUserId: parseInt(parentUserId) },
       include: {
-        student: true,
+        student: {
+          include: {
+            classStudents: {
+              include: { class: true },
+            },
+          },
+        },
       }
     });
     // Extract students from the pivot table

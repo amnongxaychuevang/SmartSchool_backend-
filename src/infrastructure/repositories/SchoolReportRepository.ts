@@ -114,7 +114,7 @@ export class SchoolReportRepository {
   async dailyCash(ymd: string) {
     const from = new Date(Date.parse(`${ymd}T00:00:00+07:00`));
     const to = addDays(from, 1);
-    const [payments, topUps] = await Promise.all([
+    const [payments, topUps, summerRegs] = await Promise.all([
       prisma.feePayment.findMany({
         where: { paidAt: { gte: from, lt: to } },
         orderBy: { paidAt: 'asc' },
@@ -129,6 +129,14 @@ export class SchoolReportRepository {
         include: {
           student: { select: { studentCode: true, fullNameEn: true, fullNameLo: true } },
           approver: { select: { userId: true, fullNameEn: true, fullNameLo: true } },
+        },
+      }),
+      prisma.summerRegistration.findMany({
+        where: { paidAt: { gte: from, lt: to }, paidAmount: { gt: 0 } },
+        orderBy: { paidAt: 'asc' },
+        include: {
+          student: { select: { studentCode: true, fullNameEn: true, fullNameLo: true } },
+          recorder: { select: { userId: true, fullNameEn: true, fullNameLo: true } },
         },
       }),
     ]);
@@ -164,13 +172,32 @@ export class SchoolReportRepository {
           student: t.student, staff: t.approver ? { fullNameEn: t.approver.fullNameEn, fullNameLo: t.approver.fullNameLo } : null,
         };
       }),
+      ...summerRegs.map((s) => {
+        const amount = num(s.paidAmount);
+        const method = s.paymentMethod === 'cash' ? 'cash' : 'bank_transfer';
+        byMethod[method] += amount;
+        addStaff(s.recorder, method, amount);
+        return {
+          kind: 'summer' as const, id: s.registrationId, time: s.paidAt || s.createdAt, amount, method, reference: s.receiptNo || s.regNo,
+          student: s.student, staff: s.recorder ? { fullNameEn: s.recorder.fullNameEn, fullNameLo: s.recorder.fullNameLo } : null,
+        };
+      }),
     ].sort((a, b) => a.time.getTime() - b.time.getTime());
 
     const feeTotal = payments.reduce((s, p) => s + num(p.amount), 0);
     const topUpTotal = topUps.reduce((s, t) => s + num(t.amount), 0);
+    const summerTotal = summerRegs.reduce((s, r) => s + num(r.paidAmount), 0);
     return {
       date: ymd,
-      totals: { all: feeTotal + topUpTotal, fees: feeTotal, topUps: topUpTotal, cash: byMethod.cash, transfer: byMethod.bank_transfer, count: entries.length },
+      totals: {
+        all: feeTotal + topUpTotal + summerTotal,
+        fees: feeTotal,
+        topUps: topUpTotal,
+        summer: summerTotal,
+        cash: byMethod.cash,
+        transfer: byMethod.bank_transfer,
+        count: entries.length,
+      },
       staff: [...staff.values()].sort((a, b) => b.cash + b.transfer - (a.cash + a.transfer)),
       entries,
     };
@@ -256,6 +283,7 @@ export class SchoolReportRepository {
     const rentalWhere: any = { status: { in: ['paid', 'partial'] } };
     const payrollWhere: any = { status: { in: ['approved', 'paid'] } };
     const expenseWhere: any = {};
+    const summerWhere: any = { paymentStatus: { in: ['paid', 'partial'] }, paidAmount: { gt: 0 } };
 
     if (startDate || endDate) {
       const gte = startDate ? new Date(startDate) : undefined;
@@ -264,6 +292,7 @@ export class SchoolReportRepository {
       rentalWhere.paidAt = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
       payrollWhere.approvedAt = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
       expenseWhere.expenseDate = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
+      summerWhere.paidAt = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) };
     }
 
     if (academicYear) {
@@ -271,9 +300,10 @@ export class SchoolReportRepository {
       rentalWhere.academicYear = academicYear;
       payrollWhere.academicYear = academicYear;
       expenseWhere.academicYear = academicYear;
+      summerWhere.academicYear = academicYear;
     }
 
-    const [feePayments, shopRentals, payrollPeriods, generalExpenses] = await Promise.all([
+    const [feePayments, shopRentals, payrollPeriods, generalExpenses, summerRegs] = await Promise.all([
       prisma.feePayment.findMany({
         where: feeWhere,
         include: {
@@ -314,6 +344,10 @@ export class SchoolReportRepository {
           category: { select: { categoryId: true, nameEn: true, nameLo: true, icon: true } },
         },
       }),
+      prisma.summerRegistration.findMany({
+        where: summerWhere,
+        select: { paidAmount: true },
+      }),
     ]);
 
     // Aggregate Fee Payments by FeeType
@@ -342,6 +376,12 @@ export class SchoolReportRepository {
       cur.total += amt;
       cur.count++;
       rentalsByShop.set(shop.shopId, cur);
+    }
+
+    // Aggregate Summer Fees
+    let totalSummerFees = 0;
+    for (const sr of summerRegs) {
+      totalSummerFees += num(sr.paidAmount);
     }
 
     // Aggregate Payroll Expenses
@@ -382,7 +422,7 @@ export class SchoolReportRepository {
       }
     }
 
-    const totalIncome = totalStudentFees + totalShopRentals;
+    const totalIncome = totalStudentFees + totalShopRentals + totalSummerFees;
     const totalExpense = totalPayrollExpense + totalGeneralExpense;
     const netCashflow = totalIncome - totalExpense;
 
@@ -395,6 +435,7 @@ export class SchoolReportRepository {
         netCashflow,
         totalStudentFees,
         totalShopRentals,
+        totalSummerFees,
         totalPayrollExpense,
         totalGeneralExpense,
       },

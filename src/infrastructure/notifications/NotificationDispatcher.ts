@@ -1,6 +1,7 @@
 import prisma from "../database/PrismaClient";
 import emailService from "./EmailService";
 import whatsAppService from "./WhatsAppService";
+import { getSocketManager } from "../websocket/SocketManager";
 
 class NotificationDispatcher {
   async dispatch(notificationId: number): Promise<void> {
@@ -55,9 +56,24 @@ class NotificationDispatcher {
           errorMessage = result.error;
           break;
         }
-        case "app_push":
+        case "app_push": {
+          const socket = getSocketManager();
+          if (socket) {
+            socket.toUser(notification.recipient.userId, 'new-notification', {
+              notificationId: notification.notificationId,
+              type: notification.type,
+              titleEn: 'Smart School Notification',
+              titleLo: 'ແຈ້ງເຕືອນຈາກ Smart School',
+              messageEn: notification.messageEn,
+              messageLo: notification.messageLo,
+              sentAt: notification.sentAt?.toISOString() || new Date().toISOString(),
+            });
+          }
+          success = true;
+          break;
+        }
         default:
-          errorMessage = `Channel "${notification.channel}" not implemented yet`;
+          errorMessage = `Channel "${notification.channel}" not supported`;
           break;
       }
     } catch (err: any) {
@@ -136,6 +152,21 @@ class NotificationDispatcher {
         }),
       ),
     );
+
+    const socket = getSocketManager();
+    if (socket) {
+      for (const n of notifications) {
+        socket.toUser(n.recipientUserId, 'new-notification', {
+          notificationId: n.notificationId,
+          type,
+          titleEn: 'Update for your child',
+          titleLo: 'ແຈ້ງເຕືອນກ່ຽວກັບລູກຂອງທ່ານ',
+          messageEn,
+          messageLo,
+          sentAt: new Date().toISOString(),
+        });
+      }
+    }
 
     for (const n of notifications) {
       this.dispatch(n.notificationId).catch((err) =>

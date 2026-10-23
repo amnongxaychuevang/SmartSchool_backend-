@@ -835,4 +835,35 @@ export const updatePayrollPeriodStatusSchema = z.object({
   status: z.enum(['draft', 'approved', 'paid']),
 });
 
+// ─── 21. Summer Extra Classes ─────────────────────────────
+export const summerCourseCreateSchema = z.object({
+  academicYear: z.string().min(1).max(9),
+  subjectNameEn: z.string().trim().min(1).max(100),
+  subjectNameLo: z.string().trim().min(1).max(100),
+  gradeLevel: z.string().max(50).nullable().optional(),
+  monthlyFee: z.coerce.number().positive(),
+  teacherName: z.string().max(100).nullable().optional(),
+  roomNumber: z.string().max(50).nullable().optional(),
+  timeSlot: z.string().max(100).nullable().optional(),
+  description: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const summerCourseUpdateSchema = summerCourseCreateSchema.partial();
+
+export const summerRegisterSchema = z.object({
+  fullNameEn: z.string().trim().min(1).max(150),
+  fullNameLo: z.string().trim().min(1).max(150),
+  gender: z.enum(['male', 'female', 'other']).optional(),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  parentName: z.string().trim().min(1).max(150),
+  phoneNumber: z.string().trim().min(1).max(30),
+  academicYear: z.string().min(1).max(9),
+  monthsEnrolled: z.array(z.coerce.number().int().min(1).max(3)).min(1),
+  courseIds: z.array(z.coerce.number().int().positive()).min(1),
+  paymentMethod: z.enum(['cash', 'bank_transfer']).default('cash'),
+  paidAmount: z.coerce.number().nonnegative().optional(),
+  notes: z.string().nullable().optional(),
+});
+
 

@@ -1,5 +1,9 @@
-import { Server  } from 'socket.io';
+import { Server } from 'socket.io';
 import DashboardEvents from './DashboardEvents';
+
+let activeSocketManager: SocketManager | null = null;
+
+export const getSocketManager = (): SocketManager | null => activeSocketManager;
 
 class SocketManager {
   io: any;
@@ -14,6 +18,7 @@ class SocketManager {
     });
 
     this.dashboardEvents = new DashboardEvents(this.io);
+    activeSocketManager = this;
     this.init();
   }
 
