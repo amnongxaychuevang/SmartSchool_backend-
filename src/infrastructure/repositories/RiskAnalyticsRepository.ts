@@ -3,6 +3,17 @@ import { evaluateStudentRisk, RiskLevel } from '../../domain/atRiskAnalytics';
 import { calculateConductScore } from '../../domain/conductScore';
 
 export class RiskAnalyticsRepository {
+  /**
+   * Each run adds a new assessment per student, so a student assessed three times has
+   * three rows. Lists and counts must use only the newest one per student, or every
+   * re-run inflates the totals and repeats the student in the list.
+   */
+  private async latestAssessmentIds(): Promise<number[]> {
+    const rows = await prisma.$queryRaw<{ id: number | bigint }[]>`
+      SELECT MAX(assessment_id) AS id FROM student_risk_assessments GROUP BY student_id`;
+    return rows.map((r) => Number(r.id));
+  }
+
   async runAssessment(params?: { classId?: number }) {
     const studentWhere: any = { status: 'active' };
     if (params?.classId) {
@@ -23,7 +34,8 @@ export class RiskAnalyticsRepository {
         },
         behaviorRecords: true,
         grades: {
-          orderBy: { createdAt: 'desc' },
+          where: { score: { not: null } },
+          orderBy: { recordedAt: 'desc' },
           take: 10,
         },
         dailyAttendance: {
@@ -59,7 +71,9 @@ export class RiskAnalyticsRepository {
       let scoreSum = 0;
 
       for (const g of grades) {
-        const val = Number(g.score);
+        // As a percentage: a 7/10 quiz is 70, not a failing 7.
+        const max = Number(g.maxScore) || 100;
+        const val = (Number(g.score) / max) * 100;
         scoreSum += val;
         if (val < 50) failingSubjects++;
       }
@@ -116,8 +130,8 @@ export class RiskAnalyticsRepository {
         const factorSummaryLo = evaluation.factors.map((f) => f.messageLo).join(', ');
         const factorSummaryEn = evaluation.factors.map((f) => f.messageEn).join(', ');
 
-        const teacherMsgEn = `⚠️ High-Risk Student Alert: ${student.fullNameEn} (${student.classStudents[0]?.class?.nameEn}) has been flagged for high risk. Reasons: ${factorSummaryEn}. Please review and intervene.`;
-        const teacherMsgLo = `⚠️ ແຈ້ງເຕືອນນັກຮຽນກຸ່ມສ່ຽງ: ນ້ອງ ${student.fullNameLo} (${student.classStudents[0]?.class?.nameLo}) ຖືກລະບົບຈັດເຂົ້າກຸ່ມສ່ຽງສູງ. ສາເຫດ: ${factorSummaryLo}. ກະລຸນາກວດສອບ ແລະ ວາງແຜນຊ່ວຍເຫຼືອ.`;
+        const teacherMsgEn = `⚠️ High-Risk Student Alert: ${student.fullNameEn} (${student.classStudents[0]?.class?.classNameEn}) has been flagged for high risk. Reasons: ${factorSummaryEn}. Please review and intervene.`;
+        const teacherMsgLo = `⚠️ ແຈ້ງເຕືອນນັກຮຽນກຸ່ມສ່ຽງ: ນ້ອງ ${student.fullNameLo} (${student.classStudents[0]?.class?.classNameLo}) ຖືກລະບົບຈັດເຂົ້າກຸ່ມສ່ຽງສູງ. ສາເຫດ: ${factorSummaryLo}. ກະລຸນາກວດສອບ ແລະ ວາງແຜນຊ່ວຍເຫຼືອ.`;
 
         prisma.notification.create({
           data: {
@@ -153,7 +167,7 @@ export class RiskAnalyticsRepository {
     const limit = Math.min(100, Math.max(1, query.limit || 20));
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { assessmentId: { in: await this.latestAssessmentIds() } };
     if (query.riskLevel) where.riskLevel = query.riskLevel;
     if (query.classId) {
       where.student = {
@@ -161,7 +175,6 @@ export class RiskAnalyticsRepository {
       };
     }
 
-    // Get latest assessment for each student
     const [total, assessments] = await Promise.all([
       prisma.studentRiskAssessment.count({ where }),
       prisma.studentRiskAssessment.findMany({
@@ -310,6 +323,7 @@ export class RiskAnalyticsRepository {
   async getOverview() {
     const latestAssessments = await prisma.studentRiskAssessment.groupBy({
       by: ['riskLevel'],
+      where: { assessmentId: { in: await this.latestAssessmentIds() } },
       _count: { assessmentId: true },
     });
 
