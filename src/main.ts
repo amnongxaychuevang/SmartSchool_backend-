@@ -15,6 +15,16 @@ import { startAutoAbsenceJob } from './infrastructure/jobs/AutoAbsenceJob';
 import { startFeeReminderJob } from './infrastructure/jobs/FeeReminderJob';
 import { startDatabaseBackupJob } from './infrastructure/jobs/DatabaseBackupJob';
 
+// Every token is signed with JWT_SECRET: a missing, short or sample value lets anyone
+// forge an admin token. Refuse to start in production rather than run like that.
+if (process.env.NODE_ENV === 'production') {
+  const secret = process.env.JWT_SECRET ?? '';
+  if (secret.length < 32 || /your_|change.?me|secret_jwt|example/i.test(secret)) {
+    console.error('FATAL: JWT_SECRET must be a random value of at least 32 characters in production (e.g. `openssl rand -hex 32`).');
+    process.exit(1);
+  }
+}
+
 const app = express();
 const server = http.createServer(app);
 

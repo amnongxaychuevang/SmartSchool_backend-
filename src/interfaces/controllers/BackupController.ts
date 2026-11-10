@@ -2,9 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { getBackupDirectory } from '../../infrastructure/jobs/DatabaseBackupJob';
+import { BACKEND_ROOT } from '../../infrastructure/backendRoot';
 
+// Plain-JS CLI script that tsc doesn't copy into dist/: load it from backend/scripts
+// so the same file is used under ts-node and in a production build.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { backup, applyRetention } = require('../../../scripts/db-backup');
+const { backup, applyRetention } = require(path.join(BACKEND_ROOT, 'scripts', 'db-backup'));
 
 class BackupController {
   async listBackups(req: Request, res: Response, next: NextFunction) {

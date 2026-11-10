@@ -8,9 +8,10 @@ node_modules
 # Prisma
 prisma/generated
 
-# Uploaded files (photos, signed documents) — user data, not source code
-uploads
-storage
+# Uploaded files (photos, signed documents) — user data, not source code.
+# Anchored to this folder: an unanchored "storage" also hid src/infrastructure/storage/.
+/uploads
+/storage
 
 # Logs
 logs

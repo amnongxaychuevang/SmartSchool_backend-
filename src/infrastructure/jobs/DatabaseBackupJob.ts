@@ -2,12 +2,15 @@ import path from 'path';
 import fs from 'fs';
 import { startDailyJob } from './dailyJob';
 import { schoolMinutesOfDay } from '../../domain/schoolTime';
+import { BACKEND_ROOT } from '../backendRoot';
 
+// Plain-JS CLI script that tsc doesn't copy into dist/: load it from backend/scripts
+// so the same file is used under ts-node and in a production build.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { backup, applyRetention } = require('../../../scripts/db-backup');
+const { backup, applyRetention } = require(path.join(BACKEND_ROOT, 'scripts', 'db-backup'));
 
 export function getBackupDirectory(): string {
-  const dir = process.env.BACKUP_DIR || path.join(__dirname, '../../../backups');
+  const dir = process.env.BACKUP_DIR || path.join(BACKEND_ROOT, 'backups');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
