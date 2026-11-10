@@ -26,3 +26,7 @@ logs
 .env
 .env.*
 !.env.example
+!deploy/uat/.env.uat.example
+
+# UAT server data (uploads, storage, backups mounted into the API container)
+/deploy/uat/data/
