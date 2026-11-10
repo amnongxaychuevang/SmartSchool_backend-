@@ -1,13 +1,16 @@
 import GetDashboardStatsUseCase from '../../application/use-cases/dashboard/GetDashboardStatsUseCase';
 import prisma from '../../infrastructure/database/PrismaClient';
 import schoolEventRepository from '../../infrastructure/repositories/SchoolEventRepository';
+import roleRepository from '../../infrastructure/repositories/RoleRepository';
+import { startOfSchoolDay, addDays } from '../../domain/schoolTime';
 
 const getDashboardStatsUseCase = new GetDashboardStatsUseCase();
 
 class DashboardController {
   async stats(req, res, next) {
     try {
-      const data = await getDashboardStatsUseCase.execute();
+      const access = await roleRepository.accessFor(req.user.role);
+      const data = await getDashboardStatsUseCase.execute(access?.permissions ?? []);
       res.json({ success: true, data });
     } catch (error) {
       next(error);
@@ -16,10 +19,10 @@ class DashboardController {
 
   async financeOverview(req, res, next) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // "Today" is the school's day (Asia/Vientiane), not the server's: a UTC server
+      // would otherwise file 00:00-07:00 Lao time under the previous day.
+      const today = startOfSchoolDay();
+      const tomorrow = addDays(today, 1);
 
       // Income: sum of top-up requests approved today (use processedAt)
       const incomeResult = await prisma.topUpRequest.aggregate({

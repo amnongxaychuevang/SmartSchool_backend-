@@ -30,12 +30,13 @@ class AuditLogRepository {
     }
   }
 
-  async findMany({ userId, entityType, action, page = 1, limit = 50 }: any = {}) {
+  async findMany({ userId, entityType, action, excludeAuth = false, page = 1, limit = 50 }: any = {}) {
     const skip = (page - 1) * limit;
     const where = {
       ...(userId ? { userId: parseInt(userId) } : {}),
       ...(entityType ? { entityType } : {}),
-      ...(action ? { action } : {}),
+      // Sign-in noise (login / failed / logout) would crowd out real changes on the dashboard.
+      ...(action ? { action } : excludeAuth ? { action: { notIn: ['login', 'login_failed', 'logout'] as any } } : {}),
     };
 
     const [logs, total] = await Promise.all([

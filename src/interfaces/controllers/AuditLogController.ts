@@ -3,11 +3,12 @@ import auditLogRepository from '../../infrastructure/repositories/AuditLogReposi
 class AuditLogController {
   async list(req, res, next) {
     try {
-      const { userId, entityType, action, page = 1, limit = 50 } = req.query;
+      const { userId, entityType, action, excludeAuth, page = 1, limit = 50 } = req.query;
       const result = await auditLogRepository.findMany({
         userId,
         entityType,
         action,
+        excludeAuth: excludeAuth === '1' || excludeAuth === 'true',
         page: parseInt(page),
         limit: parseInt(limit),
       });
