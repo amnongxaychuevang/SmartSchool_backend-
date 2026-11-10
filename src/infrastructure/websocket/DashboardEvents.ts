@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import prisma from '../database/PrismaClient';
 import schoolEventRepository from '../repositories/SchoolEventRepository';
+import { startOfSchoolDay, addDays } from '../../domain/schoolTime';
 
 class DashboardEvents {
   private io: Server;
@@ -12,10 +13,10 @@ class DashboardEvents {
   // Emit finance overview update to all connected clients
   async emitFinanceUpdate() {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // "Today" is the school's day (Asia/Vientiane), not the server's: a UTC server
+      // would otherwise file 00:00-07:00 Lao time under the previous day.
+      const today = startOfSchoolDay();
+      const tomorrow = addDays(today, 1);
 
       const incomeResult = await prisma.topUpRequest.aggregate({
         _sum: { amount: true },
