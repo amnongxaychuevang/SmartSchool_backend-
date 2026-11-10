@@ -55,4 +55,18 @@ describe('backup retention', () => {
     expect(keep).toEqual([name('2026-10-21', '2300')]);
     expect(remove).toEqual([name('2026-10-21', '0900')]);
   });
+
+  it('counts database dumps and file archives separately', () => {
+    const files = (day: string) => `files_${day}_2300.tar.gz`;
+    expect(parseBackupName(files('2026-10-21'))).toMatchObject({ kind: 'files', day: '2026-10-21' });
+    expect(parseBackupName('files_2026-10-21_2300.sql.gz')).toBeNull();
+
+    const dumps = nightly('2026-10-01', '2026-10-21');
+    const archives = dumps.map((n) => files(n.slice('smart_school_'.length, 'smart_school_'.length + 10)));
+    const { keep } = planRetention([...dumps, ...archives], policy);
+    // Same days kept for each kind: the archives do not take the dumps' slots.
+    expect(keep.filter((n) => n.startsWith('files_')).length).toBe(keep.filter((n) => n.startsWith('smart_school_')).length);
+    expect(keep).toContain(name('2026-10-21'));
+    expect(keep).toContain(files('2026-10-21'));
+  });
 });

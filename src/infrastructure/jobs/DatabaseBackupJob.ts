@@ -8,6 +8,8 @@ import { BACKEND_ROOT } from '../backendRoot';
 // so the same file is used under ts-node and in a production build.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { backup, applyRetention } = require(path.join(BACKEND_ROOT, 'scripts', 'db-backup'));
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const filesBackup = require(path.join(BACKEND_ROOT, 'scripts', 'files-backup'));
 
 export function getBackupDirectory(): string {
   const dir = process.env.BACKUP_DIR || path.join(BACKEND_ROOT, 'backups');
@@ -17,7 +19,7 @@ export function getBackupDirectory(): string {
   return dir;
 }
 
-/** Nightly automated database backup job (runs at 02:00 AM Lao local time). */
+/** Nightly backup (02:00 Lao time): the database dump, then the uploaded files. */
 export function startDatabaseBackupJob() {
   return startDailyJob(
     'DatabaseBackup',
@@ -28,9 +30,16 @@ export function startDatabaseBackupJob() {
     async () => {
       const dir = getBackupDirectory();
       const file = await backup(dir);
+      const archive: string | null = filesBackup.enabled() ? await filesBackup.backupFiles(dir) : null;
       const removed = applyRetention(dir);
       const sizeKb = Math.round(fs.statSync(file).size / 1024);
-      return { file: path.basename(file), sizeKb, removedOldCount: removed };
+      return {
+        file: path.basename(file),
+        sizeKb,
+        filesArchive: archive ? path.basename(archive) : null,
+        filesSizeKb: archive ? Math.round(fs.statSync(archive).size / 1024) : 0,
+        removedOldCount: removed,
+      };
     },
   );
 }

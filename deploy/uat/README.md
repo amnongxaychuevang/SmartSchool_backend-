@@ -69,11 +69,14 @@ sudo chown -R 1000:1000 data
 ```bash
 docker compose build                     # ຄັ້ງທຳອິດໃຊ້ເວລາຫຼາຍນາທີ
 docker compose up -d db                  # ລໍໃຫ້ status ເປັນ healthy: docker compose ps
-docker compose run --rm api npx prisma db push --skip-generate
-docker compose run --rm api npx prisma db seed     # ສ້າງ roles ແລະ admin
+docker compose run --rm api npx prisma migrate deploy   # ສ້າງຕາຕະລາງຈາກ prisma/migrations
+docker compose run --rm api npx prisma db seed          # ສ້າງ roles ແລະ admin ຈາກ SEED_ADMIN_* ໃນ .env
 docker compose up -d
 docker compose ps                        # ທັງ 3 container ຕ້ອງ Up
 ```
+
+- ຖ້າບໍ່ໄດ້ຕັ້ງ `SEED_ADMIN_EMAIL` ແລະ `SEED_ADMIN_PASSWORD` ໃນ `.env`, seed ຈະບໍ່ຍອມ run.
+- ລະຫັດຕ້ອງຍາວຢ່າງໜ້ອຍ 12 ຕົວອັກສອນ.
 
 **ຫ້າມ** run `db:seed-demo` ຖ້າຈະໃຫ້ຄົນນອກມາທົດສອບດ້ວຍຂໍ້ມູນທີ່ຄ້າຍຂອງແທ້.
 
@@ -101,10 +104,10 @@ sudo certbot --nginx -d edusmart.phousam.com
 curl -I https://edusmart.phousam.com/                  # 200
 curl -s -X POST https://edusmart.phousam.com/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"phoneOrEmail":"admin@smartschool.com","password":"password123"}' | head -c 80
+  -d '{"phoneOrEmail":"x","password":"x"}' -o /dev/null -w '%{http_code}\n'   # 401 = API ເຮັດວຽກ
 ```
 
-ຈາກນັ້ນເປີດໃນ browser, login, ແລ້ວ**ປ່ຽນລະຫັດ admin ທັນທີ**. Seed ຕັ້ງໄວ້ເປັນ `password123` ທີ່ທຸກຄົນຮູ້.
+ຈາກນັ້ນເປີດໃນ browser ແລ້ວ login ດ້ວຍ `SEED_ADMIN_EMAIL` ແລະ `SEED_ADMIN_PASSWORD`.
 
 ---
 
@@ -114,22 +117,53 @@ curl -s -X POST https://edusmart.phousam.com/api/auth/login \
 cd ~/edusmart-uat/backend  && git pull
 cd ~/edusmart-uat/frontend && git pull
 cd ~/edusmart-uat/backend/deploy/uat
-docker compose up -d --build
-docker compose run --rm api npx prisma db push --skip-generate   # ຖ້າ schema ປ່ຽນ
+docker exec edusmart-uat-api node scripts/db-backup.js           # backup ກ່ອນປ່ຽນ schema
+docker compose build
+docker compose run --rm api npx prisma migrate deploy            # run ສະເພາະ migration ໃໝ່
+docker compose up -d
 ```
 
-`db push` ອາດລຶບ column ທີ່ຖືກເອົາອອກຈາກ schema ພ້ອມຂໍ້ມູນໃນ column ນັ້ນ. ໃຫ້ອ່ານສິ່ງທີ່ມັນເຕືອນກ່ອນຕອບ yes.
+- `migrate deploy` run ສະເພາະໄຟລ໌ໃນ `prisma/migrations` ທີ່ຍັງບໍ່ເຄີຍ run, ແລະ ບໍ່ເຄີຍລຶບຂໍ້ມູນເອງ.
+- **ຫ້າມໃຊ້ `prisma db push`** ກັບ server ນີ້.
+
+**Database ທີ່ສ້າງດ້ວຍ `db push` ກ່ອນມີ migrations** (ເຊັ່ນ UAT ທີ່ deploy ວັນທີ 2026-11-10) ຕ້ອງບອກ Prisma ວ່າ baseline ຖືກ run ແລ້ວ. ເຮັດເທື່ອດຽວກ່ອນ `migrate deploy` ຄັ້ງທຳອິດ:
+
+```bash
+docker compose run --rm api npx prisma migrate resolve --applied 0_init
+```
+
+ສ້າງ migration ໃໝ່ໃນເຄື່ອງ dev ຫຼັງແກ້ `schema.prisma`: `npm run db:migrate:new -- --name <ຊື່>`. ອ່ານໄຟລ໌ SQL ທີ່ໄດ້ກ່ອນ commit.
 
 ## ເບິ່ງ log ແລະ backup
 
 ```bash
 docker compose logs -f api
 docker compose logs -f web
-ls -lh data/backups/                                   # backup database ອັດຕະໂນມັດທຸກຄືນ
+ls -lh data/backups/                                   # backup ອັດຕະໂນມັດທຸກຄືນ ເວລາ 02:00
 docker exec edusmart-uat-api node scripts/db-backup.js # backup ດ້ວຍມື
 ```
 
-Backup ອັດຕະໂນມັດເກັບ **ແຕ່ database**. ຖ້າຈະເກັບຮູບ ແລະ ເອກະສານນຳ ໃຫ້ copy `data/uploads` ແລະ `data/storage` ໄປເກັບບ່ອນອື່ນ.
+ແຕ່ລະຄັ້ງໄດ້ 2 ໄຟລ໌:
+
+| ໄຟລ໌ | ເນື້ອໃນ |
+|---|---|
+| `smart_school_*.sql.gz` | database |
+| `files_*.tar.gz` | ຮູບ ແລະ ເອກະສານ (`uploads/` ແລະ `storage/`) |
+
+ລະບົບເກັບ backup ຂອງ 7 ມື້, 4 ອາທິດ ແລະ 12 ເດືອນຫຼ້າສຸດ. ສອງປະເພດນັບແຍກກັນ.
+
+ຖ້າຢາກເກັບສະເພາະ database ໃຫ້ຕັ້ງ `BACKUP_FILES=0`.
+
+ກູ້ໄຟລ໌ຄືນ (ຢຸດ API ກ່ອນ):
+
+```bash
+docker compose stop api
+sudo tar -xzf data/backups/files_YYYY-MM-DD_HHMM.tar.gz -C data/   # ຂຽນທັບ data/uploads ແລະ data/storage
+sudo chown -R 1000:1000 data/uploads data/storage
+docker compose start api
+```
+
+Backup ຢູ່ໃນ server ດຽວກັນ. ຖ້າ disk ເສຍ, backup ກໍ່ເສຍນຳ. ຄວນ copy `data/backups/` ໄປໄວ້ບ່ອນອື່ນເປັນປະຈຳ.
 
 ## ລຶບ UAT ອອກທັງໝົດ
 

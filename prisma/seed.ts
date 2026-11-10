@@ -58,24 +58,24 @@ async function main() {
   }
   console.log('Provinces & districts seeded ✓');
 
-  // Seed admin user only if not yet created
-  const existingAdmin = await prisma.user.findFirst({
-    where: { email: 'admin@smartschool.com' }
-  });
+  // First admin account, created once. In production the email and password must come
+  // from SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD: the dev defaults are in a public repo.
+  const { email, password } = adminCredentials();
+  const existingAdmin = await prisma.user.findFirst({ where: { email } });
 
   if (existingAdmin) {
-    console.log('Admin user already exists, skipping.');
+    console.log(`Admin user ${email} already exists, skipping.`);
     return;
   }
 
-  const passwordHash = await bcrypt.hash('password123', 10);
-  
+  const passwordHash = await bcrypt.hash(password, 10);
+
   await prisma.user.create({
     data: {
       fullNameEn: 'System Admin',
       fullNameLo: 'ຜູ້ເບິ່ງແຍງລະບົບ',
-      email: 'admin@smartschool.com',
-      phoneNumber: '+856 20 5555 5555',
+      email,
+      phoneNumber: process.env.SEED_ADMIN_PHONE || '+856 20 5555 5555',
       passwordHash,
       roleId: adminRole.roleId,
       isActive: true,
@@ -83,7 +83,26 @@ async function main() {
     }
   });
 
-  console.log('Admin user created: admin@smartschool.com / password123');
+  // Never print a password that was set on purpose.
+  console.log(`Admin user created: ${email}${process.env.SEED_ADMIN_PASSWORD ? '' : ' / password123 (dev default)'}`);
+}
+
+const DEV_ADMIN = { email: 'admin@smartschool.com', password: 'password123' };
+const WEAK = /^(password|admin|123456|qwerty|changeme|change_me)/i;
+
+function adminCredentials() {
+  const email = process.env.SEED_ADMIN_EMAIL?.trim();
+  const password = process.env.SEED_ADMIN_PASSWORD;
+  if (process.env.NODE_ENV !== 'production') {
+    return { email: email || DEV_ADMIN.email, password: password || DEV_ADMIN.password };
+  }
+  if (!email || !password) {
+    throw new Error('Production seed needs SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD in the environment.');
+  }
+  if (password.length < 12 || WEAK.test(password)) {
+    throw new Error('SEED_ADMIN_PASSWORD is too weak: use at least 12 characters, not a common password.');
+  }
+  return { email, password };
 }
 
 main()

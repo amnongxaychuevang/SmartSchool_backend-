@@ -5,7 +5,8 @@
 //   2. checks the file is complete (gzip reads to the end, the dump says "Dump completed")
 //   3. only then deletes old backups: keeps the newest of each of the last
 //      7 days, 4 weeks and 12 months (BACKUP_KEEP_DAILY / _WEEKLY / _MONTHLY)
-//   4. copies it to BACKUP_COPY_DIR as well, if set (e.g. a Google Drive or USB folder)
+//   4. archives uploads/ and storage/ too (scripts/files-backup.js; BACKUP_FILES=0 skips it)
+//   5. copies both to BACKUP_COPY_DIR as well, if set (e.g. a Google Drive or USB folder)
 // Every run appends one line to <BACKUP_DIR>/backup.log. Exit code 1 on failure.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,6 +14,7 @@ const zlib = require('node:zlib');
 const { pipeline } = require('node:stream/promises');
 const { connection, findProgram, withOptionFile, run } = require('./lib/mysql');
 const { planRetention } = require('./lib/retention');
+const filesBackup = require('./files-backup');
 
 const policy = {
   daily: Number(process.env.BACKUP_KEEP_DAILY || 7),
@@ -93,15 +95,17 @@ async function main() {
   try {
     const file = await backup(dir);
     const sizeKb = Math.round(fs.statSync(file).size / 1024);
+    const archive = filesBackup.enabled() ? await filesBackup.backupFiles(dir) : null;
     const removed = applyRetention(dir);
     let copied = '';
     const copyDir = process.env.BACKUP_COPY_DIR;
     if (copyDir) {
       fs.mkdirSync(copyDir, { recursive: true });
-      fs.copyFileSync(file, path.join(copyDir, path.basename(file)));
+      for (const f of [file, archive].filter(Boolean)) fs.copyFileSync(f, path.join(copyDir, path.basename(f)));
       copied = `, copied to ${copyDir} (removed ${applyRetention(copyDir)} old there)`;
     }
-    log(dir, `OK ${path.basename(file)} ${sizeKb} KB, removed ${removed} old${copied}`);
+    const files = archive ? `, ${path.basename(archive)} ${Math.round(fs.statSync(archive).size / 1024)} KB` : '';
+    log(dir, `OK ${path.basename(file)} ${sizeKb} KB${files}, removed ${removed} old${copied}`);
   } catch (err) {
     // Old backups are never touched when the new one failed.
     log(dir, `FAILED ${err.message}`);

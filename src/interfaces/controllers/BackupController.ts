@@ -8,6 +8,8 @@ import { BACKEND_ROOT } from '../../infrastructure/backendRoot';
 // so the same file is used under ts-node and in a production build.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { backup, applyRetention } = require(path.join(BACKEND_ROOT, 'scripts', 'db-backup'));
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const filesBackup = require(path.join(BACKEND_ROOT, 'scripts', 'files-backup'));
 
 class BackupController {
   async listBackups(req: Request, res: Response, next: NextFunction) {
@@ -49,6 +51,7 @@ class BackupController {
       const dir = getBackupDirectory();
       const filePath = await backup(dir);
       const stat = fs.statSync(filePath);
+      if (filesBackup.enabled()) await filesBackup.backupFiles(dir);
       const removed = applyRetention(dir);
 
       res.status(201).json({

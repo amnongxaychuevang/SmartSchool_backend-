@@ -17,6 +17,8 @@
     "db:seed-demo:reset": "ts-node -T prisma/seed-demo.ts --reset",
     "db:seed-features": "ts-node -T scripts/seed-features.ts",
     "prisma:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:new": "prisma migrate dev --create-only",
     "prisma:push": "prisma db push"
   },
   "keywords": [],
