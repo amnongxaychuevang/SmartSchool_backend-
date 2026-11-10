@@ -88,14 +88,12 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d edusmart.phousam.com
 ```
 
-ເມື່ອໄດ້ cert ແລ້ວ ຈຶ່ງເປີດ Cloudflare Proxy ໄດ້ (ເມກສີສົ້ມ):
+ແນະນຳໃຫ້ record ຂອງ UAT ເປັນ **DNS only** (ເມກສີເທົາ) ຕະຫຼອດ.
 
-- ໄປທີ່ Cloudflare → SSL/TLS ແລ້ວກວດວ່າ mode ເປັນ **Full (strict)** ຫຼື **Full**.
-- ຖ້າເປັນ **Flexible**, browser ຈະ redirect ວົນບໍ່ຢຸດ.
-- ຢ່າປ່ຽນ mode ຂອງທັງ zone ໂດຍບໍ່ກວດກ່ອນ, ເພາະ phousam.com ໃຊ້ mode ດຽວກັນ. ຖ້າຈຳເປັນ ໃຫ້ໃຊ້ Configuration Rule ສະເພາະ `edusmart.phousam.com`.
-- WebSocket (socket.io) ຜ່ານ Cloudflare ໄດ້ໂດຍບໍ່ຕ້ອງຕັ້ງຫຍັງເພີ່ມ.
-- `TRUST_PROXY=2` ໃນ compose ແມ່ນສຳລັບ Cloudflare → nginx → API. ມັນເຮັດໃຫ້ rate-limit ແລະ audit log ເຫັນ IP ແທ້ຂອງຜູ້ໃຊ້.
-- ຖ້າປິດ proxy ຖາວອນ ໃຫ້ປ່ຽນເປັນ `1`.
+- Server ນີ້ບໍ່ມີ port 443. ສະແດງວ່າ phousam.com ໃຊ້ Cloudflare SSL mode **Flexible**.
+- ຖ້າເປີດ Proxy ໃຫ້ subdomain ນີ້ໃນຂະນະທີ່ mode ຍັງເປັນ Flexible, browser ຈະ redirect ວົນບໍ່ຢຸດ.
+- ຖ້າຢາກເປີດ Proxy ແທ້ໆ ໃຫ້ສ້າງ Configuration Rule ສະເພາະ `edusmart.phousam.com` ເພື່ອຕັ້ງ SSL ເປັນ **Full (strict)**. ຫ້າມປ່ຽນ mode ຂອງທັງ zone ເພາະຈະກະທົບ phousam.com.
+- ຈາກນັ້ນໃສ່ `TRUST_PROXY=2` ໃນ `.env` ແລ້ວ run `docker compose up -d`. ຄ່າເລີ່ມຕົ້ນແມ່ນ `1`, ເຊິ່ງໝາຍເຖິງມີແຕ່ nginx ຢູ່ຂ້າງໜ້າ API.
 
 ## 7. ກວດຫຼັງ deploy
 
