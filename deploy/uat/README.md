@@ -26,8 +26,10 @@ sudo ss -ltnp | grep -E ':(5100|3100)\b' || echo "ports free"
 
 ## 1. DNS
 
-ເພີ່ມ **A record**: `uat-edusmart` → IP ຂອງ server.
-ກວດດ້ວຍ `dig +short uat-edusmart.phousam.com` ວ່າໄດ້ IP ຂອງ server.
+ໃນ Cloudflare ເພີ່ມ **A record**: `edusmart` → `141.98.17.187`.
+
+- ໃນຕອນທຳອິດ ໃຫ້ຕັ້ງ Proxy ເປັນ **DNS only** (ເມກສີເທົາ) ເພື່ອໃຫ້ certbot ອອກ cert ໃນຂັ້ນ 6 ໄດ້ງ່າຍ.
+- ກວດດ້ວຍ `dig +short edusmart.phousam.com`. ຕ້ອງໄດ້ `141.98.17.187`.
 
 ## 2. ເອົາໂຄດຂຶ້ນ server
 
@@ -83,14 +85,23 @@ docker compose ps                        # ທັງ 3 container ຕ້ອງ Up
 sudo cp nginx-edusmart-uat.conf /etc/nginx/sites-available/edusmart-uat
 sudo ln -s /etc/nginx/sites-available/edusmart-uat /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d uat-edusmart.phousam.com
+sudo certbot --nginx -d edusmart.phousam.com
 ```
+
+ເມື່ອໄດ້ cert ແລ້ວ ຈຶ່ງເປີດ Cloudflare Proxy ໄດ້ (ເມກສີສົ້ມ):
+
+- ໄປທີ່ Cloudflare → SSL/TLS ແລ້ວກວດວ່າ mode ເປັນ **Full (strict)** ຫຼື **Full**.
+- ຖ້າເປັນ **Flexible**, browser ຈະ redirect ວົນບໍ່ຢຸດ.
+- ຢ່າປ່ຽນ mode ຂອງທັງ zone ໂດຍບໍ່ກວດກ່ອນ, ເພາະ phousam.com ໃຊ້ mode ດຽວກັນ. ຖ້າຈຳເປັນ ໃຫ້ໃຊ້ Configuration Rule ສະເພາະ `edusmart.phousam.com`.
+- WebSocket (socket.io) ຜ່ານ Cloudflare ໄດ້ໂດຍບໍ່ຕ້ອງຕັ້ງຫຍັງເພີ່ມ.
+- `TRUST_PROXY=2` ໃນ compose ແມ່ນສຳລັບ Cloudflare → nginx → API. ມັນເຮັດໃຫ້ rate-limit ແລະ audit log ເຫັນ IP ແທ້ຂອງຜູ້ໃຊ້.
+- ຖ້າປິດ proxy ຖາວອນ ໃຫ້ປ່ຽນເປັນ `1`.
 
 ## 7. ກວດຫຼັງ deploy
 
 ```bash
-curl -I https://uat-edusmart.phousam.com/                  # 200
-curl -s -X POST https://uat-edusmart.phousam.com/api/auth/login \
+curl -I https://edusmart.phousam.com/                  # 200
+curl -s -X POST https://edusmart.phousam.com/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"phoneOrEmail":"admin@smartschool.com","password":"password123"}' | head -c 80
 ```
