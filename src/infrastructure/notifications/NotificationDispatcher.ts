@@ -62,8 +62,8 @@ class NotificationDispatcher {
             socket.toUser(notification.recipient.userId, 'new-notification', {
               notificationId: notification.notificationId,
               type: notification.type,
-              titleEn: 'Smart School Notification',
-              titleLo: 'ແຈ້ງເຕືອນຈາກ Smart School',
+              titleEn: 'EduSmart Notification',
+              titleLo: 'ແຈ້ງເຕືອນຈາກ EduSmart',
               messageEn: notification.messageEn,
               messageLo: notification.messageLo,
               sentAt: notification.sentAt?.toISOString() || new Date().toISOString(),

@@ -63,10 +63,10 @@ class PasswordResetUseCase {
     await this.resetRepository.create(user.userId, await bcrypt.hash(code, 10), new Date(Date.now() + CODE_TTL_MS));
 
     const text = user.langPref === 'en'
-      ? `Smart School: your password reset code is ${code}. It expires in 10 minutes. If you did not ask for it, ignore this message.`
-      : `Smart School: ລະຫັດຢືນຢັນເພື່ອຕັ້ງລະຫັດຜ່ານໃໝ່ແມ່ນ ${code}. ໃຊ້ໄດ້ 10 ນາທີ. ຖ້າທ່ານບໍ່ໄດ້ຂໍ, ບໍ່ຕ້ອງສົນໃຈຂໍ້ຄວາມນີ້.`;
+      ? `EduSmart: your password reset code is ${code}. It expires in 10 minutes. If you did not ask for it, ignore this message.`
+      : `EduSmart: ລະຫັດຢືນຢັນເພື່ອຕັ້ງລະຫັດຜ່ານໃໝ່ແມ່ນ ${code}. ໃຊ້ໄດ້ 10 ນາທີ. ຖ້າທ່ານບໍ່ໄດ້ຂໍ, ບໍ່ຕ້ອງສົນໃຈຂໍ້ຄວາມນີ້.`;
     const result = byEmail
-      ? await this.sender.email(user.email, 'Smart School password reset', text)
+      ? await this.sender.email(user.email, 'EduSmart password reset', text)
       : await this.sender.whatsApp(user.phoneNumber, text);
     if (!result.success) {
       console.error(`[PasswordReset] code not delivered to user ${user.userId}:`, result.error);
